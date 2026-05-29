@@ -1,0 +1,53 @@
+# Environment and secrets
+.env
+.env.*
+*.local
+secrets/
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Node / TypeScript
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+*.tsbuildinfo
+coverage/
+
+# Models and large artifacts (never commit weights)
+*.bin
+*.safetensors
+*.gguf
+*.pt
+*.onnx
+models/
+weights/
+
+# Benchmark raw output (recorded results are committed deliberately)
+benchmarks/results/raw/
+*.tmp
+
+# Containers and local infra state
+*.pid
+.data/
+pgdata/
+
+# OS and editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
