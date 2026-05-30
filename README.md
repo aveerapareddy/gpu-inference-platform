@@ -1,8 +1,8 @@
 # GPU Inference Platform
 
-Status: Architecture Phase
+Status: Architecture Phase (Session 1 complete)
 Implementation: Not Started
-Current Milestone: Repository skeleton and architecture foundation
+Current Milestone: Serving Phase — API gateway, scheduler, adapter (single model)
 
 ## Engineering thesis
 
@@ -73,18 +73,18 @@ benchmarks/
 
 ## Current phase
 
-Architecture Phase. The repository contains the directory skeleton and the
-architecture documents. No runtime logic is implemented. The design is fixed
-first so that implementation follows a reviewed plan.
+Architecture Phase. Session 1 locked the end-to-end design: component boundaries,
+request lifecycle states, serving workflow, scheduler philosophy, and
+observability model. No runtime logic is implemented.
 
-Start with `docs/overview/project-constitution.md` and
-`docs/overview/project-end-state.md`, then the documents in `docs/architecture`.
+Read order: `docs/overview/project-constitution.md` →
+`docs/workflows/request-serving-workflow.md` → `docs/architecture/runtime-model.md`.
 
 ## Implementation status
 
 | Area | Status |
 | --- | --- |
-| Architecture documents | In progress |
+| Architecture documents (Session 1) | Complete |
 | API gateway | Not started |
 | Control plane | Not started |
 | Scheduler | Not started |
@@ -110,7 +110,7 @@ change that adds or removes a capability.
 
 ## Next milestone
 
-Complete and review the architecture documents, then begin the Serving Phase: a
-working API gateway, scheduler, and inference adapter serving a single model
-through a mock or CPU backend, with the request path observable. Scope and exit
-criteria are defined in `docs/overview/project-end-state.md`.
+Begin the Serving Phase: working API gateway, scheduler, and inference adapter
+for a single model through a mock or CPU backend, with the request path
+observable per `docs/workflows/request-serving-workflow.md`. Exit criteria in
+`docs/overview/project-end-state.md`.
