@@ -1,6 +1,6 @@
 # GPU Inference Platform
 
-Status: Architecture Phase (Session 1 complete)
+Status: Architecture Phase (Session 2 complete)
 Implementation: Not Started
 Current Milestone: Serving Phase — API gateway, scheduler, adapter (single model)
 
@@ -49,7 +49,9 @@ docs/
   workflows/       end-to-end request serving workflow
   runbooks/        local operational runbook (planned procedures)
   diagrams/        architecture and workflow diagrams
-  examples/        OpenAI-compatible request and response contracts
+  examples/        Pointers to contract docs
+  contracts/       API, runtime, state, service, metrics contracts
+api-specs/         OpenAPI (client HTTP)
 services/
   api-gateway/      OpenAI-compatible HTTP surface
   control-plane/    registry, routing, membership, config
@@ -58,8 +60,8 @@ services/
   metrics-collector/ metrics and trace aggregation
   operator-console/  read-only operational view
 packages/
-  common-schemas/  cross-service data contracts
-  observability/   shared logging, metrics, tracing helpers
+  common-schemas/  JSON Schema definitions
+  observability/   metric naming contract
 infra/
   db/              control-plane state store setup
   docker/          container builds and local compose
@@ -73,18 +75,19 @@ benchmarks/
 
 ## Current phase
 
-Architecture Phase. Session 1 locked the end-to-end design: component boundaries,
-request lifecycle states, serving workflow, scheduler philosophy, and
-observability model. No runtime logic is implemented.
+Architecture Phase. Session 1 locked behavior; Session 2 locked contracts
+(OpenAPI, JSON Schema, service interfaces, metric catalog). No runtime logic is
+implemented.
 
 Read order: `docs/overview/project-constitution.md` →
-`docs/workflows/request-serving-workflow.md` → `docs/architecture/runtime-model.md`.
+`docs/workflows/request-serving-workflow.md` → `docs/contracts/README.md`.
 
 ## Implementation status
 
 | Area | Status |
 | --- | --- |
 | Architecture documents (Session 1) | Complete |
+| Platform contracts (Session 2) | Complete |
 | API gateway | Not started |
 | Control plane | Not started |
 | Scheduler | Not started |

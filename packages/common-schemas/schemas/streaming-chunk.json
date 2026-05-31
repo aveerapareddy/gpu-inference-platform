@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gpu-inference-platform/schemas/streaming-chunk.json",
+  "title": "StreamingChunk",
+  "description": "Incremental token from adapter. Owner: inference adapter.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "request_id",
+    "batch_id",
+    "index",
+    "delta_text",
+    "finish_reason",
+    "created_at"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "batch_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "index": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "delta_text": {
+      "type": "string"
+    },
+    "finish_reason": {
+      "oneOf": [
+        { "$ref": "enums.json#/$defs/FinishReason" },
+        { "type": "null" }
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gpu-inference-platform/schemas/queue-item.json",
+  "title": "QueueItem",
+  "description": "Scheduler queue entry. Owner: scheduler.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "request_id",
+    "inference_request",
+    "request_context",
+    "enqueued_at",
+    "priority_class",
+    "queue_name"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "inference_request": {
+      "$ref": "inference-request.json"
+    },
+    "request_context": {
+      "$ref": "request-context.json"
+    },
+    "enqueued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "priority_class": {
+      "$ref": "enums.json#/$defs/PriorityClass"
+    },
+    "queue_name": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

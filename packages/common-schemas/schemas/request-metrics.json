@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gpu-inference-platform/schemas/request-metrics.json",
+  "title": "RequestMetrics",
+  "description": "Per-request observability record. Owner: all services; merged at terminal.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["request_id", "model", "status", "failure_reason", "arrival_time"],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "model": {
+      "type": "string"
+    },
+    "backend": {
+      "type": "string"
+    },
+    "status": {
+      "$ref": "enums.json#/$defs/TerminalStatus"
+    },
+    "failure_reason": {
+      "oneOf": [
+        { "$ref": "enums.json#/$defs/FailureReason" },
+        { "type": "null" }
+      ]
+    },
+    "arrival_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "queue_wait_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "scheduling_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "ttft_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "itl_ms_p50": {
+      "type": "number",
+      "minimum": 0
+    },
+    "itl_ms_p99": {
+      "type": "number",
+      "minimum": 0
+    },
+    "completion_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "token_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "worker_id": {
+      "type": "string"
+    },
+    "batch_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "stream": {
+      "type": "boolean"
+    },
+    "priority_class": {
+      "$ref": "enums.json#/$defs/PriorityClass"
+    }
+  }
+}

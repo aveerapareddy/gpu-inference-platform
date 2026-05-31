@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gpu-inference-platform/schemas/enums.json",
+  "title": "PlatformEnums",
+  "description": "Shared enumerations. Status: contract only; not implemented.",
+  "$defs": {
+    "RequestState": {
+      "type": "string",
+      "enum": [
+        "received",
+        "validated",
+        "admitted",
+        "queued",
+        "scheduled",
+        "prefilling",
+        "decoding",
+        "streaming",
+        "completed",
+        "failed",
+        "timed_out",
+        "rejected",
+        "cancelled"
+      ]
+    },
+    "BatchState": {
+      "type": "string",
+      "enum": [
+        "forming",
+        "dispatched",
+        "prefilling",
+        "decoding",
+        "completed",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "BackendState": {
+      "type": "string",
+      "enum": [
+        "registering",
+        "idle",
+        "busy",
+        "draining",
+        "unhealthy",
+        "offline"
+      ]
+    },
+    "SchedulerState": {
+      "type": "string",
+      "enum": [
+        "starting",
+        "accepting",
+        "saturated",
+        "draining",
+        "unavailable"
+      ]
+    },
+    "FailureReason": {
+      "type": "string",
+      "enum": [
+        "validation_error",
+        "unknown_model",
+        "queue_full",
+        "no_capacity",
+        "queue_timeout",
+        "prefill_timeout",
+        "decode_timeout",
+        "e2e_timeout",
+        "worker_error",
+        "adapter_error",
+        "internal_error",
+        "client_cancel",
+        "authentication_error",
+        "unsupported_field"
+      ]
+    },
+    "FinishReason": {
+      "type": "string",
+      "enum": ["stop", "length", "cancelled", "error"]
+    },
+    "TerminalStatus": {
+      "type": "string",
+      "enum": ["completed", "failed", "timed_out", "rejected", "cancelled"]
+    },
+    "PriorityClass": {
+      "type": "string",
+      "enum": ["default", "elevated", "background"]
+    },
+    "MessageRole": {
+      "type": "string",
+      "enum": ["system", "user", "assistant"]
+    },
+    "Component": {
+      "type": "string",
+      "enum": [
+        "gateway",
+        "control_plane",
+        "scheduler",
+        "adapter",
+        "worker"
+      ]
+    }
+  }
+}

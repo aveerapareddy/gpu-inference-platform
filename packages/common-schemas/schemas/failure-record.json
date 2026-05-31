@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gpu-inference-platform/schemas/failure-record.json",
+  "title": "FailureRecord",
+  "description": "Terminal failure. Owner: component that detects failure.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "request_id",
+    "status",
+    "failure_reason",
+    "failed_at",
+    "component"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["failed", "rejected", "timed_out", "cancelled"]
+    },
+    "failure_reason": {
+      "$ref": "enums.json#/$defs/FailureReason"
+    },
+    "failed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "component": {
+      "$ref": "enums.json#/$defs/Component"
+    },
+    "message": {
+      "type": "string"
+    },
+    "last_state": {
+      "$ref": "enums.json#/$defs/RequestState"
+    }
+  }
+}

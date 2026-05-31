@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gpu-inference-platform/schemas/submit-request.json",
+  "title": "SubmitRequest",
+  "description": "Gateway to scheduler submit body.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["inference_request", "request_context"],
+  "properties": {
+    "inference_request": {
+      "$ref": "inference-request.json"
+    },
+    "request_context": {
+      "$ref": "request-context.json"
+    }
+  }
+}

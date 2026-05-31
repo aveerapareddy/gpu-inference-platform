@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gpu-inference-platform/schemas/request-context.json",
+  "title": "RequestContext",
+  "description": "Trace and correlation context. Owner: API gateway; read-only downstream.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "request_id",
+    "trace_id",
+    "span_id",
+    "arrival_time",
+    "model",
+    "stream",
+    "gateway_instance_id"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "trace_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "span_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "arrival_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "model": {
+      "type": "string"
+    },
+    "stream": {
+      "type": "boolean"
+    },
+    "gateway_instance_id": {
+      "type": "string"
+    }
+  }
+}

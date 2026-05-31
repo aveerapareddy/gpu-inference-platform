@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gpu-inference-platform/schemas/batch-assignment.json",
+  "title": "BatchAssignment",
+  "description": "Single request slot in a batch. Owner: scheduler.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["request_id", "slot_index", "inference_request"],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "slot_index": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "inference_request": {
+      "$ref": "inference-request.json"
+    }
+  }
+}
