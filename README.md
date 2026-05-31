@@ -92,7 +92,7 @@ Read order: `docs/overview/project-constitution.md` →
 | Shared schema package (Session 3) | Complete |
 | Observability package (Session 3) | Complete (scaffolding) |
 | Service scaffolds (Session 3) | Complete |
-| API gateway runtime | Not started |
+| API gateway runtime | Session 4 — validation only (no inference) |
 | Control plane runtime | Not started |
 | Scheduler runtime | Not started |
 | Inference adapter runtime | Not started |

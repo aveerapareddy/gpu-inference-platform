@@ -110,6 +110,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReadyResponse'
+  /version:
+    get:
+      operationId: version
+      summary: Service version
+      security: []
+      tags: [operations]
+      responses:
+        '200':
+          description: Build identity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionResponse'
   /metrics:
     get:
       operationId: metrics
@@ -151,6 +164,16 @@ components:
           type: string
           enum: [ready, not_ready]
         reason:
+          type: string
+    VersionResponse:
+      type: object
+      required: [service, version, gateway_instance_id]
+      properties:
+        service:
+          type: string
+        version:
+          type: string
+        gateway_instance_id:
           type: string
     ErrorResponse:
       type: object

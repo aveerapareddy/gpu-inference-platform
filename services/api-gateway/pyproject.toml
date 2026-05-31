@@ -6,7 +6,16 @@ requires-python = ">=3.11"
 dependencies = [
     "gpu-inference-common-schemas>=0.1.0",
     "gpu-inference-observability>=0.1.0",
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.32,<1",
+    "pydantic-settings>=2.6,<3",
 ]
+
+[project.optional-dependencies]
+dev = ["httpx>=0.27", "mypy>=1.8", "ruff>=0.3"]
+
+[project.scripts]
+gpu-inference-gateway = "api_gateway.main:run"
 
 [build-system]
 requires = ["hatchling"]
@@ -18,3 +27,7 @@ packages = ["src/api_gateway"]
 [tool.uv.sources]
 gpu-inference-common-schemas = { path = "../../packages/common-schemas", editable = true }
 gpu-inference-observability = { path = "../../packages/observability", editable = true }
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

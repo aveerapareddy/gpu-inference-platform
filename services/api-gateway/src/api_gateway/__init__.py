@@ -1,3 +1,3 @@
-"""API gateway service package. Runtime not implemented (Session 3)."""
+"""API gateway service."""
 
 __version__ = "0.1.0"
