@@ -1,0 +1,54 @@
+"""Lifecycle event emission (structured logs only)."""
+
+from __future__ import annotations
+
+from enum import StrEnum
+from typing import Any
+from uuid import UUID
+
+from gpu_inference_observability import LogContext, StructuredLogger
+
+
+class LifecycleEventType(StrEnum):
+    REQUEST_CREATED = "request_created"
+    REQUEST_ADMITTED = "request_admitted"
+    REQUEST_QUEUED = "request_queued"
+    REQUEST_REJECTED = "request_rejected"
+    REQUEST_FAILED = "request_failed"
+    REQUEST_COMPLETED = "request_completed"
+
+
+class LifecycleEventEmitter:
+    def __init__(self, logger: StructuredLogger, service_name: str) -> None:
+        self._logger = logger
+        self._service_name = service_name
+
+    def emit(
+        self,
+        event_type: LifecycleEventType,
+        request_id: UUID,
+        *,
+        model: str | None = None,
+        from_state: str | None = None,
+        to_state: str | None = None,
+        failure_reason: str | None = None,
+        extra: dict[str, Any] | None = None,
+    ) -> None:
+        ctx = LogContext(
+            service=self._service_name,
+            request_id=request_id,
+            model=model,
+        )
+        fields: dict[str, Any] = {
+            "event_type": event_type.value,
+            "lifecycle_event": True,
+        }
+        if from_state is not None:
+            fields["from_state"] = from_state
+        if to_state is not None:
+            fields["to_state"] = to_state
+        if failure_reason is not None:
+            fields["failure_reason"] = failure_reason
+        if extra:
+            fields.update(extra)
+        self._logger.info(event_type.value, ctx=ctx, **fields)

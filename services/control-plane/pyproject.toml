@@ -1,12 +1,19 @@
 [project]
 name = "gpu-inference-control-plane"
 version = "0.1.0"
-description = "Model registry, routing, and worker membership"
+description = "Request lifecycle, registry, and admission framework"
 requires-python = ">=3.11"
 dependencies = [
     "gpu-inference-common-schemas>=0.1.0",
     "gpu-inference-observability>=0.1.0",
+    "pydantic-settings>=2.6,<3",
 ]
+
+[project.optional-dependencies]
+dev = ["mypy>=1.8", "ruff>=0.3"]
+
+[project.scripts]
+gpu-inference-control-plane = "control_plane.main:run"
 
 [build-system]
 requires = ["hatchling"]
