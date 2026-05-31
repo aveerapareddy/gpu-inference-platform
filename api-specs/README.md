@@ -1,7 +1,7 @@
 # API Specifications
 
-Status: Architecture Phase (Session 2 — contracts locked)
-Implementation: Not Started
+Status: Foundation (Session 2–3)
+Implementation: Spec complete; endpoints not served
 
 | File | Scope |
 | --- | --- |

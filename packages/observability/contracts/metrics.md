@@ -1,9 +1,9 @@
 # Metrics Contract
 
-Status: Architecture Phase (Session 2 — contracts locked)
-Implementation: Not Started
+Status: Implemented (Session 3) — names in code; export not implemented
+Implementation: `gpu_inference_observability.metrics.MetricName`
 
-Authoritative metric catalog: `docs/contracts/observability-metrics.md`.
+Authoritative catalog: `docs/contracts/observability-metrics.md`.
 
-This package will supply naming helpers and label validators aligned with that
-catalog when implementation starts. No runtime code exists yet.
+Use `prometheus_name(MetricName.REQUEST_TTFT_SECONDS)` for prefixed export when
+Prometheus client is added in a later session.

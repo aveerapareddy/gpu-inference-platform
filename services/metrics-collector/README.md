@@ -1,9 +1,40 @@
 # Metrics Collector
 
-Status: Not implemented (Architecture Phase)
+Status: Scaffolded (Session 3). Runtime not implemented.
+Implementation: Not Started
 
-Receives and aggregates metrics and traces from the other services and exposes
-them for Prometheus and Grafana. Owns observability state; core services do not.
+## Ownership
 
-See `docs/architecture/observability-and-reliability.md`. No runtime code exists
-yet.
+Process: `services/metrics-collector`. Package: `metrics_collector`.
+
+## Responsibilities
+
+- Scrape or receive metrics from platform services
+- Enforce naming via `gpu_inference_observability.metrics`
+- Expose aggregated Prometheus text (planned)
+- Optional `RequestMetrics` push intake
+
+## Inputs
+
+- `GET /metrics` from each service
+- Optional push events
+
+## Outputs
+
+- Prometheus-compatible exposition (planned)
+- No feedback into request path
+
+## Non-responsibilities
+
+- Request routing or scheduling
+- Log storage
+- Alerting product
+
+## Dependencies
+
+- `gpu-inference-common-schemas`
+- `gpu-inference-observability`
+
+## Contracts
+
+- `docs/contracts/observability-metrics.md`

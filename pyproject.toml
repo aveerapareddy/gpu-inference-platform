@@ -1,0 +1,16 @@
+[project]
+name = "gpu-inference-platform"
+version = "0.1.0"
+description = "GPU Inference Platform monorepo"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv]
+dev-dependencies = [
+    "gpu-inference-common-schemas",
+    "gpu-inference-observability",
+]
+
+[tool.uv.sources]
+gpu-inference-common-schemas = { path = "packages/common-schemas", editable = true }
+gpu-inference-observability = { path = "packages/observability", editable = true }

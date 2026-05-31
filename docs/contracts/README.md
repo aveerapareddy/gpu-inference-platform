@@ -1,7 +1,7 @@
 # Contracts
 
-Status: Architecture Phase (Session 2 — contracts locked)
-Implementation: Not Started
+Status: Architecture Phase (Session 2 contracts; Session 3 Python models)
+Implementation: Typed models in packages/common-schemas; HTTP not served
 
 This directory is the human-readable contract index. Machine-readable definitions
 live in `api-specs/` (HTTP) and `packages/common-schemas/schemas/` (runtime).

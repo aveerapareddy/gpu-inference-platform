@@ -1,10 +1,43 @@
 # Control Plane
 
-Status: Not implemented (Architecture Phase)
+Status: Scaffolded (Session 3). Runtime not implemented.
+Implementation: Not Started
 
-Owns the model registry, routing policy, worker pool membership, and runtime
-configuration. Answers which model and which worker pool serve a request. Sole
-writer of configuration and registry state.
+## Ownership
 
-See `docs/architecture/system-overview.md` and
-`docs/architecture/storage-design.md`. No runtime code exists yet.
+Process: `services/control-plane`. Package: `control_plane`.
+
+## Responsibilities
+
+- Model registry (`ModelRecord`)
+- Routing policy and worker pool membership
+- Runtime configuration (queue limits, priority classes)
+- Internal read APIs for gateway and scheduler
+- Operator write APIs for configuration
+
+## Inputs
+
+- Operator configuration changes
+- Worker registration events from adapter
+
+## Outputs
+
+- Model metadata and routing decisions
+- Worker membership snapshots
+- Configuration version for cache invalidation
+
+## Non-responsibilities
+
+- Per-request admission or queue state
+- Dispatch or token streaming
+- Metrics aggregation
+
+## Dependencies
+
+- `gpu-inference-common-schemas`
+- `gpu-inference-observability`
+
+## Contracts
+
+- `docs/contracts/service-interfaces.md`
+- `packages/common-schemas/schemas/model-record.json`

@@ -3,8 +3,12 @@ info:
   title: GPU Inference Platform API
   version: 0.1.0
   description: |
-    Client and operational HTTP contracts. Status: planned; not served.
-    Prose: docs/contracts/openai-api.md
+    Client and operational HTTP contracts.
+    Implementation status: not served (Session 3 foundation only).
+    Prose and validation rules: docs/contracts/openai-api.md
+    Typed models: packages/common-schemas (gpu-inference-common-schemas).
+  x-implementation-status: not-started
+  x-session: "3"
 servers:
   - url: http://localhost:8080
     description: Local gateway (planned)

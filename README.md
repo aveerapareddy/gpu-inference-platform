@@ -1,8 +1,8 @@
 # GPU Inference Platform
 
-Status: Architecture Phase (Session 2 complete)
-Implementation: Not Started
-Current Milestone: Serving Phase — API gateway, scheduler, adapter (single model)
+Status: Foundation Phase (Session 3 complete)
+Implementation: Shared packages only; service runtime not started
+Current Milestone: Serving Phase — API gateway HTTP surface (no scheduler logic yet)
 
 ## Engineering thesis
 
@@ -60,8 +60,9 @@ services/
   metrics-collector/ metrics and trace aggregation
   operator-console/  read-only operational view
 packages/
-  common-schemas/  JSON Schema definitions
-  observability/   metric naming contract
+  common-schemas/  JSON Schema + Pydantic models (common_schemas)
+  observability/   logging, tracing, metric names
+services/          each has pyproject.toml and src/ (no runtime logic)
 infra/
   db/              control-plane state store setup
   docker/          container builds and local compose
@@ -75,12 +76,12 @@ benchmarks/
 
 ## Current phase
 
-Architecture Phase. Session 1 locked behavior; Session 2 locked contracts
-(OpenAPI, JSON Schema, service interfaces, metric catalog). No runtime logic is
-implemented.
+Session 1–2 locked architecture and contracts. Session 3 implemented shared
+Python packages (`common_schemas`, `gpu_inference_observability`) and service
+skeletons. No request execution, scheduling, or HTTP serving yet.
 
 Read order: `docs/overview/project-constitution.md` →
-`docs/workflows/request-serving-workflow.md` → `docs/contracts/README.md`.
+`docs/workflows/request-serving-workflow.md` → `packages/common-schemas/README.md`.
 
 ## Implementation status
 
@@ -88,13 +89,15 @@ Read order: `docs/overview/project-constitution.md` →
 | --- | --- |
 | Architecture documents (Session 1) | Complete |
 | Platform contracts (Session 2) | Complete |
-| API gateway | Not started |
-| Control plane | Not started |
-| Scheduler | Not started |
-| Inference adapter | Not started |
-| Metrics collector | Not started |
+| Shared schema package (Session 3) | Complete |
+| Observability package (Session 3) | Complete (scaffolding) |
+| Service scaffolds (Session 3) | Complete |
+| API gateway runtime | Not started |
+| Control plane runtime | Not started |
+| Scheduler runtime | Not started |
+| Inference adapter runtime | Not started |
+| Metrics collector runtime | Not started |
 | Operator console | Not started |
-| Shared packages | Not started |
 | Infra (db, docker, k8s) | Not started |
 | Observability stack (prometheus, grafana) | Not started |
 | Benchmarks | Not started |

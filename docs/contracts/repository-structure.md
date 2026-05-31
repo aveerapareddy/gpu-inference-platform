@@ -1,7 +1,7 @@
 # Repository Structure Validation
 
-Status: Architecture Phase (Session 2)
-Implementation: Not Started
+Status: Architecture Phase (Session 3 review)
+Implementation: Shared packages and service scaffolds exist; no service runtime
 
 ## Verdict
 
@@ -53,8 +53,27 @@ packages/observability/
 docs/contracts/         # This directory
 ```
 
+## Session 3 additions
+
+| Path | Status |
+| --- | --- |
+| `packages/common-schemas/src/common_schemas/` | Pydantic v2 models (source of truth for Python) |
+| `packages/observability/src/gpu_inference_observability/` | Logging, tracing, metric name scaffolding |
+| `services/*/pyproject.toml` + `src/*/__init__.py` | Per-service skeleton (5 services) |
+| `pyproject.toml` (root) | uv workspace pointers for local dev |
+
+## Session 3 review findings
+
+| Item | Action |
+| --- | --- |
+| `shared/contracts/` | Still not needed |
+| `operator-console/` | README only; UI deferred. Add `pyproject.toml` when UI session starts |
+| `api-specs/internal-openapi.yaml` | Future Work; internal paths documented in prose only |
+| JSON Schema vs Pydantic drift | CI check (Future Work): validate models against `schemas/` |
+
+No additional packages required before gateway implementation.
+
 ## Implementation rule
 
-When Serving Phase starts, the first change in each service is to import or
-generate types from `packages/common-schemas/schemas/`. No hand-written duplicate
-structs for fields already in schema files.
+Services import `common_schemas` types. Do not duplicate field definitions.
+JSON Schema files remain for contract review and non-Python tooling.

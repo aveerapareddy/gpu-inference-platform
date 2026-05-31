@@ -1,9 +1,28 @@
 # observability
 
-Status: Not implemented (Architecture Phase)
+Status: Implemented (Session 3 — scaffolding)
+Implementation: Logging/tracing/metric names; no Prometheus or OpenTelemetry
 
-Shared logging, metrics, and tracing helpers so every service emits consistent
-signals with the same label and field conventions. Used by all services to keep
-observability uniform.
+Python package `gpu_inference_observability` (distribution: `gpu-inference-observability`).
 
-See `docs/architecture/observability-and-reliability.md`. No code exists yet.
+## Install
+
+```bash
+pip install -e packages/observability
+```
+
+## Modules
+
+| Module | Purpose |
+| --- | --- |
+| `logging.py` | `LogContext`, `StructuredLogger` (JSON lines to stderr) |
+| `tracing.py` | `TraceContext`, `TraceSpanName` |
+| `metrics.py` | `MetricName`, `MetricKind`, `prometheus_name()` |
+
+Metric catalog: `docs/contracts/observability-metrics.md`.
+
+## Usage
+
+```python
+from gpu_inference_observability import StructuredLogger, MetricName, TraceContext
+```
