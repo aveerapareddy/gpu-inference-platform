@@ -93,7 +93,7 @@ Read order: `docs/overview/project-constitution.md` →
 | Observability package (Session 3) | Complete (scaffolding) |
 | Service scaffolds (Session 3) | Complete |
 | API gateway runtime | Session 6 — integrated through QUEUED (no inference) |
-| Control plane runtime | Session 6 — embedded in gateway; lifecycle through QUEUED |
+| Control plane runtime | Session 7 — waiting queue through QUEUED (no scheduler) |
 | Scheduler runtime | Not started |
 | Inference adapter runtime | Not started |
 | Metrics collector runtime | Not started |

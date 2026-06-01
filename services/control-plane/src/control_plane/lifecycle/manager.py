@@ -15,6 +15,7 @@ from control_plane.failures.categories import AdmissionFailure, InternalFailure
 from control_plane.failures.framework import FailureFramework
 from control_plane.lifecycle.transitions import is_allowed_transition
 from control_plane.observability.events import LifecycleEventEmitter, LifecycleEventType
+from control_plane.queue.service import QueueService
 from control_plane.registry.memory import InMemoryRequestRegistry
 from control_plane.registry.models import RegisteredRequest
 from control_plane.scheduler.client import SchedulerClient
@@ -29,16 +30,19 @@ class LifecycleManager:
         admission: AdmissionFramework,
         scheduler: SchedulerClient,
         events: LifecycleEventEmitter,
+        queue: QueueService,
     ) -> None:
         self._registry = registry
         self._admission = admission
         self._scheduler = scheduler
         self._events = events
+        self._queue = queue
 
     async def process_through_queued(self, submit: SubmitRequest) -> RegisteredRequest:
         """RECEIVED -> VALIDATED -> ADMITTED -> QUEUED. Stops at QUEUED."""
         request_id = submit.inference_request.request_id
         try:
+            self._queue.process_timeouts()
             entry = self.register(submit, initial_state=RequestState.RECEIVED)
             entry = self.transition(request_id, RequestState.VALIDATED)
             entry = await self.run_admission(request_id)
@@ -48,7 +52,7 @@ class LifecycleManager:
                 raise InternalFailure(
                     f"unexpected state after admission: {entry.state.value}"
                 )
-            return self.transition(request_id, RequestState.QUEUED)
+            return self._queue.enqueue_from_admitted(request_id)
         except InvalidTransitionError:
             raise
         except InternalFailure:
@@ -170,7 +174,7 @@ class LifecycleManager:
         elif to_state == RequestState.ADMITTED:
             self._events.emit(LifecycleEventType.REQUEST_ADMITTED, entry.request_id, **common)
         elif to_state == RequestState.QUEUED:
-            self._events.emit(LifecycleEventType.REQUEST_QUEUED, entry.request_id, **common)
+            pass
         elif to_state == RequestState.REJECTED:
             self._events.emit(
                 LifecycleEventType.REQUEST_REJECTED,

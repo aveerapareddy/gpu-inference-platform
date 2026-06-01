@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any
 from uuid import UUID
@@ -17,8 +18,16 @@ class LifecycleEventType(StrEnum):
     REQUEST_REJECTED = "request_rejected"
     REQUEST_FAILED = "request_failed"
     REQUEST_COMPLETED = "request_completed"
-    # Alias retained for backward compatibility in logs.
     REQUEST_CREATED = "request_received"
+
+
+class QueueEventType(StrEnum):
+    REQUEST_ENQUEUED = "request_enqueued"
+    REQUEST_DEQUEUED = "request_dequeued"
+    QUEUE_FULL = "queue_full"
+    QUEUE_TIMEOUT = "queue_timeout"
+    QUEUE_REMOVED = "queue_removed"
+    REQUEST_QUEUED = "request_queued"
 
 
 class LifecycleEventEmitter:
@@ -64,4 +73,34 @@ class LifecycleEventEmitter:
             fields["failure_reason"] = failure_reason
         if extra:
             fields.update(extra)
+        self._logger.info(event_type.value, ctx=ctx, **fields)
+
+    def emit_queue(
+        self,
+        event_type: QueueEventType | LifecycleEventType,
+        request_id: UUID,
+        *,
+        correlation_id: str | None = None,
+        model: str | None = None,
+        queue_position: int | None = None,
+        extra: dict[str, Any] | None = None,
+    ) -> None:
+        ts = datetime.now(timezone.utc).isoformat()
+        fields: dict[str, Any] = {
+            "event_type": event_type.value,
+            "queue_event": True,
+            "timestamp": ts,
+        }
+        if correlation_id is not None:
+            fields["correlation_id"] = correlation_id
+        if queue_position is not None:
+            fields["queue_position"] = queue_position
+        if extra:
+            fields.update(extra)
+        ctx = LogContext(
+            service=self._service_name,
+            request_id=request_id,
+            trace_id=correlation_id,
+            model=model,
+        )
         self._logger.info(event_type.value, ctx=ctx, **fields)

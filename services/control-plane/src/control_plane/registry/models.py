@@ -17,6 +17,8 @@ class RegisteredRequest:
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     failure_reason: FailureReason | None = None
     failure_message: str | None = None
+    queue_entered_at: datetime | None = None
+    queue_position: int | None = None
 
     @property
     def request_id(self):

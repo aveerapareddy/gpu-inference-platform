@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     service_name: str = "control-plane"
     registry_max_entries: int = 10_000
     remove_terminal_after_seconds: int = 3600
+    max_queue_size: int = 1000
+    queue_timeout_ms: int = 300_000
 
 
 @lru_cache

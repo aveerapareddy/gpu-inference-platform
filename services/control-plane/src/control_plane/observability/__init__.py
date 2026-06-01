@@ -1,3 +1,3 @@
-from control_plane.observability.events import LifecycleEventEmitter, LifecycleEventType
+from control_plane.observability.events import LifecycleEventEmitter, LifecycleEventType, QueueEventType
 
-__all__ = ["LifecycleEventEmitter", "LifecycleEventType"]
+__all__ = ["LifecycleEventEmitter", "LifecycleEventType", "QueueEventType"]
