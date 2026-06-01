@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from common_schemas.inference_request import InferenceRequest, RequestContext
+from common_schemas.states import RequestState
+from control_plane.registry.models import RegisteredRequest
 from gpu_inference_observability.tracing import TraceContext
 
 from api_gateway.config import Settings
@@ -28,6 +30,8 @@ class GatewayRequestContext:
     received_timestamp: datetime
     requested_model: str
     trace: TraceContext
+    lifecycle_state: RequestState
+    registered: RegisteredRequest | None = None
 
     @property
     def request_id(self) -> UUID:
@@ -62,4 +66,5 @@ def build_request_context(
         received_timestamp=received,
         requested_model=inference_request.model,
         trace=trace,
+        lifecycle_state=RequestState.VALIDATED,
     )

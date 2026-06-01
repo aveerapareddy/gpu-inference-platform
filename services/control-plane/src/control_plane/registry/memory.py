@@ -60,3 +60,16 @@ class InMemoryRequestRegistry:
     def count(self) -> int:
         with self._lock:
             return len(self._entries)
+
+    def list_active(self) -> list[RegisteredRequest]:
+        """Non-terminal requests currently owned by the control plane."""
+        with self._lock:
+            return [
+                entry
+                for entry in self._entries.values()
+                if not is_terminal_request_state(entry.state)
+            ]
+
+    def list_by_state(self, state: RequestState) -> list[RegisteredRequest]:
+        with self._lock:
+            return [entry for entry in self._entries.values() if entry.state == state]

@@ -1,7 +1,7 @@
 # API Gateway
 
-Status: Session 4 — validation and contract enforcement implemented
-Implementation: HTTP server runs; inference and scheduler not connected
+Status: Session 6 — integrated with control plane through QUEUED
+Implementation: HTTP server runs; requests registered and queued; no inference
 
 ## Ownership
 
@@ -9,109 +9,76 @@ Process: `services/api-gateway`. Package: `api_gateway`.
 
 ## Responsibilities (implemented)
 
-- OpenAI-compatible HTTP surface (`POST /v1/chat/completions`, `POST /v1/completions`)
-- Bearer API key validation
-- JSON body size limit (default 4 MiB)
-- Supported vs unsupported field enforcement
-- Pydantic schema validation for allowed fields
-- Model lookup via control plane interface (stub registry)
-- `InferenceRequest` and `RequestContext` creation per request
-- Correlation IDs (`X-Correlation-Id`, `X-Request-Id`, response headers)
-- Structured JSON logging and request timing middleware
-- Operational endpoints: `GET /health`, `GET /ready`, `GET /version`
-- OpenAI-shaped error responses for all failure classes
+- OpenAI-compatible HTTP (`POST /v1/chat/completions`, `POST /v1/completions`)
+- Bearer API key validation, body size and schema validation
+- Unsupported field rejection
+- Model lookup (stub registry: `demo`, `example-model`)
+- `RequestContext` and `InferenceRequest` construction
+- Handoff to embedded control plane: lifecycle through `QUEUED`
+- Correlation headers (`X-Correlation-Id`, `X-Request-Id`)
+- Structured logging and request timing middleware
+- `GET /health`, `GET /ready`, `GET /version`
+- OpenAI-shaped errors including admission rejections from control plane
 
 ## Responsibilities (not implemented)
 
-- Scheduler submit or queueing
-- Streaming (SSE); `stream=true` returns HTTP 501
-- Inference execution and real completions
-- Prometheus metrics export (`GET /metrics`)
-- Distributed tracing export
-- HTTP control plane client (stub only)
+- Scheduler submit or inference execution
+- Streaming (`stream=true` returns HTTP 501)
+- Real model completions (placeholder JSON only)
+- HTTP to separate control-plane process (in-process integration only)
+- Prometheus metrics, distributed tracing export
 - Rate limiting
 
-## Lifecycle (per request)
+## Request flow (Session 6)
 
-1. Middleware records wall time; passes correlation headers through.
-2. Auth: validate `Authorization: Bearer`.
-3. Parse JSON; reject oversize or malformed bodies.
-4. Reject unsupported fields; validate allowed schema.
-5. Reject `stream=true` (not implemented).
-6. Resolve model via `ControlPlaneClient.get_model`.
-7. Build `InferenceRequest` and `GatewayRequestContext` (`RequestContext` inside).
-8. Return placeholder completion JSON (contract shape only).
-9. Log validation and response timing.
+```
+Client POST
+  → Gateway: auth, parse, validate
+  → Gateway: build SubmitRequest + RequestContext
+  → Control Plane: RECEIVED → VALIDATED → ADMITTED → QUEUED
+  → Gateway: placeholder completion response
+```
 
-States `received` / `validated` are implied; scheduler states are not entered.
-
-## Inputs
-
-- Client HTTP requests and headers
-- Stub control plane model registry
-
-## Outputs
-
-- HTTP 200 placeholder completions (non-streaming only)
-- HTTP 4xx/5xx structured `error` objects
-- Response headers: `X-Request-Id`, `X-Correlation-Id`
-- Structured logs to stderr
-
-## Control plane interface
-
-- `api_gateway.control_plane.client.ControlPlaneClient` (protocol)
-- `api_gateway.control_plane.stub.StubControlPlaneClient` (default)
-
-Registered stub models: `demo`, `example-model`.
+Admission rejections return HTTP 429/400 with structured `error` body.
+Internal control plane errors return HTTP 500 and `FAILED` in registry when possible.
 
 ## Run locally
 
 ```bash
-pip install -e packages/common-schemas -e packages/observability -e services/api-gateway
+pip install -e packages/common-schemas -e packages/observability \
+  -e services/control-plane -e services/api-gateway
 GATEWAY_API_KEYS=dev-key gpu-inference-gateway
 ```
 
-Example:
-
 ```bash
-curl -s http://localhost:8080/health
 curl -s -H "Authorization: Bearer dev-key" -H "Content-Type: application/json" \
   -d '{"model":"demo","messages":[{"role":"user","content":"hello"}]}' \
   http://localhost:8080/v1/chat/completions
 ```
 
-## Configuration
+Response message includes `lifecycle_state=queued`.
 
-Environment prefix `GATEWAY_`:
+## Configuration
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `HOST` | `0.0.0.0` | Bind address |
-| `PORT` | `8080` | Bind port |
-| `MAX_BODY_BYTES` | 4194304 | Max JSON body |
-| `API_KEYS` | empty | Comma-separated allowlist; empty accepts any non-empty bearer |
-| `CONTROL_PLANE_STUB_ENABLED` | `true` | Use in-process stub |
+| `GATEWAY_API_KEYS` | empty | Comma-separated allowlist |
+| `GATEWAY_CONTROL_PLANE_INTEGRATED` | true | Embed control plane in gateway process |
 
 ## Contracts
 
 - `api-specs/openapi.yaml`
 - `docs/contracts/openai-api.md`
-- `packages/common-schemas`
+- `docs/workflows/request-serving-workflow.md`
 
 ## Layout
 
 ```
 src/api_gateway/
-  app.py              FastAPI factory, lifespan, routers
-  main.py             uvicorn entry
-  config.py           settings
-  dependencies.py     DI
-  errors.py           OpenAI error envelope
-  validation.py       auth, body, model rules
-  context.py          GatewayRequestContext
-  pipeline.py         validate + placeholder response
-  middleware.py       timing logs
-  control_plane/      client protocol + stub
-  routers/            health, completions
-  schemas/            client request models
+  app.py
+  pipeline.py              validate + control plane handoff
+  control_plane/
+    integrated.py          IntegratedControlPlaneClient
+    client.py              protocol
+  routers/                 health, completions
 ```

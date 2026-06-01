@@ -1,117 +1,98 @@
 # Control Plane
 
-Status: Session 5 — lifecycle and frameworks implemented
-Implementation: In-process library; no HTTP server; no scheduler connection
+Status: Session 6 — gateway-integrated lifecycle through QUEUED
+Implementation: In-process with API gateway; no HTTP server; no scheduler
 
 ## Ownership
 
 Process: `services/control-plane`. Package: `control_plane`.
 
-Per-request lifecycle authority for Session 5: registration, state transitions,
-and admission framework orchestration. Model registry HTTP and durable storage
-remain Future Work.
+Per-request lifecycle authority: registration, validated transitions, admission
+framework, stop at `QUEUED`. Model registry HTTP and durable storage remain
+Future Work.
 
 ## Responsibilities (implemented)
 
 - Application bootstrap with `startup()` / `shutdown()`
-- In-memory request registry (register, get, update state, remove)
-- Lifecycle manager with transition validation (`docs/contracts/state-models.md`)
-- Admission framework extension points (default: accept all)
-- Scheduler client interface + stub (no submit behavior)
-- Lifecycle event emission via structured logs
-- Failure classification framework (validation, admission, scheduler, backend, internal)
+- In-memory request registry with query APIs
+- Lifecycle progression: `RECEIVED` → `VALIDATED` → `ADMITTED` → `QUEUED`
+- Transition validation per `docs/contracts/state-models.md`
+- Admission framework extension points (default: accept)
+- Scheduler client interface + stub (no scheduling)
+- Lifecycle events: `request_received`, `request_validated`, `request_admitted`, `request_queued`, plus rejection/failure events
+- Failure states retained in registry (`REJECTED`, `FAILED`)
+- `RegistryQueries`: status, details, list active, list by state
+- `LifecycleManager.process_through_queued()` for gateway handoff
 
 ## Responsibilities (not implemented)
 
-- HTTP APIs (`/internal/v1/models`, worker registration)
+- HTTP APIs
+- States beyond `QUEUED` (`SCHEDULED`, `PREFILLING`, inference path)
 - Scheduler logic, batching, routing
-- Inference execution, streaming, token generation
-- Admission policies (queue limits, timeouts, saturation)
-- Persistence, retry logic, metrics export
-- Gateway integration (handoff in a later session)
+- Inference execution, streaming
+- Admission policies with real limits
+- Persistence, retry logic
+- Metrics export
 
-## Lifecycle
-
-Allowed transitions enforced in `lifecycle/transitions.py`. Example path:
+## Lifecycle (Session 6 stopping point)
 
 ```
-VALIDATED → ADMITTED → QUEUED → SCHEDULED → … → COMPLETED
+RECEIVED → VALIDATED → ADMITTED → QUEUED
+                ↓           ↓
+            REJECTED    REJECTED (admission)
+                ↓
+             FAILED (internal error)
 ```
 
-Terminal states remove the entry from the registry after the transition event.
+Invalid examples (raise `InvalidTransitionError`):
 
-| Method | Purpose |
-| --- | --- |
-| `lifecycle.register(submit)` | Register at `VALIDATED`; emit `request_created` |
-| `lifecycle.run_admission(id)` | `VALIDATED` → `ADMITTED` or `REJECTED` |
-| `lifecycle.transition(id, state)` | Validated state change + event |
-| `lifecycle.handoff_to_scheduler(id)` | Calls stub only; no scheduling |
+- `VALIDATED` → `RECEIVED`
+- `COMPLETED` → `QUEUED`
+- `QUEUED` → `PREFILLING` (not enabled until scheduler session)
 
-## Interfaces
+## Gateway integration
 
-| Module | Type |
-| --- | --- |
-| `admission/interfaces.py` | `AdmissionEvaluator`, `QueueCapacityCheck`, `TimeoutCheck`, `PolicyEvaluator` |
-| `admission/framework.py` | `AdmissionFramework` |
-| `scheduler/client.py` | `SchedulerClient` |
-| `scheduler/stub.py` | `StubSchedulerClient` |
-| `failures/categories.py` | `ValidationFailure`, `AdmissionFailure`, … |
-| `failures/framework.py` | `FailureFramework` propagation rules |
+Gateway embeds `ControlPlaneApplication` via `IntegratedControlPlaneClient`
+(`services/api-gateway`). On each completion request:
 
-## Lifecycle events
+1. Gateway validates HTTP input and builds `SubmitRequest`
+2. `accept_request()` runs `process_through_queued()`
+3. Gateway returns placeholder response; request remains `QUEUED` in registry
 
-Emitted as structured logs (`lifecycle_event=true`):
+## Registry queries
 
-- `request_created`
-- `request_admitted`
-- `request_queued`
-- `request_rejected`
-- `request_failed`
-- `request_completed`
+```python
+app.queries.get_status(request_id)
+app.queries.get_details(request_id)
+app.queries.list_active()
+app.queries.list_by_state(RequestState.QUEUED)
+```
 
-## Run (process placeholder)
+## Run (standalone process)
 
 ```bash
 pip install -e packages/common-schemas -e packages/observability -e services/control-plane
 gpu-inference-control-plane
 ```
 
-Program blocks until interrupted; no HTTP listener.
-
-## Example (library)
-
-```python
-import asyncio
-from common_schemas.inference_request import SubmitRequest
-from control_plane import create_application
-
-async def demo():
-    app = create_application()
-    await app.startup()
-    submit = ...  # SubmitRequest from gateway
-    entry = app.lifecycle.register(submit)
-    await app.lifecycle.run_admission(entry.request_id)
-    await app.shutdown()
-
-asyncio.run(demo())
-```
+No HTTP listener. Use gateway for integrated path.
 
 ## Configuration
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `CONTROL_PLANE_REGISTRY_MAX_ENTRIES` | 10000 | Registry capacity |
-| `CONTROL_PLANE_REMOVE_TERMINAL_AFTER_SECONDS` | 3600 | Reserved for future cleanup |
 
 ## Layout
 
 ```
 src/control_plane/
-  application.py       ControlPlaneApplication
-  lifecycle/           manager, transitions
-  registry/            InMemoryRequestRegistry
-  admission/           framework + protocols
-  scheduler/           client + stub + types
-  failures/            categories + framework
-  observability/       LifecycleEventEmitter
+  application.py
+  lifecycle/manager.py    process_through_queued
+  registry/memory.py      in-memory store + list_* 
+  registry/queries.py     read API
+  admission/              framework + protocols
+  scheduler/              client + stub
+  failures/               categories + framework
+  observability/events.py lifecycle log events
 ```

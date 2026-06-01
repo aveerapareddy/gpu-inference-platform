@@ -1,4 +1,4 @@
-"""Validate requests and build gateway context. No scheduler or inference."""
+"""Validate requests, register with control plane, return placeholder response."""
 
 from __future__ import annotations
 
@@ -6,6 +6,8 @@ import hashlib
 import time
 from typing import Any
 
+from common_schemas.inference_request import SubmitRequest
+from common_schemas.states import RequestState
 from gpu_inference_observability import LogContext, StructuredLogger
 
 from api_gateway.config import Settings
@@ -39,7 +41,7 @@ async def process_chat_completion(
     logger: StructuredLogger,
     is_legacy_completion: bool = False,
 ) -> tuple[GatewayRequestContext, float]:
-    """Returns validated context and validation duration in milliseconds."""
+    """Validate, register with control plane, advance lifecycle to QUEUED."""
     started = time.perf_counter()
     token = validate_api_key(authorization, settings)
     body = parse_json_body(raw_body, settings.max_body_bytes)
@@ -73,25 +75,43 @@ async def process_chat_completion(
         correlation_id=correlation_id,
     )
 
+    submit = SubmitRequest(
+        inference_request=ctx.inference_request,
+        request_context=ctx.request_context,
+    )
+    accept_result = await control_plane.accept_request(submit)
+
+    gateway_ctx = GatewayRequestContext(
+        request_context=ctx.request_context,
+        inference_request=ctx.inference_request,
+        correlation_id=ctx.correlation_id,
+        received_timestamp=ctx.received_timestamp,
+        requested_model=ctx.requested_model,
+        trace=ctx.trace,
+        lifecycle_state=accept_result.state,
+        registered=accept_result.entry,
+    )
+
     elapsed_ms = (time.perf_counter() - started) * 1000.0
     log_ctx = LogContext(
         service=settings.service_name,
-        request_id=ctx.request_id,
-        trace_id=ctx.correlation_id,
-        span_id=ctx.request_context.span_id,
-        model=ctx.requested_model,
+        request_id=gateway_ctx.request_id,
+        trace_id=gateway_ctx.correlation_id,
+        span_id=gateway_ctx.request_context.span_id,
+        model=gateway_ctx.requested_model,
     )
     logger.info(
-        "request validated",
+        "request queued in control plane",
         ctx=log_ctx,
         validation_ms=round(elapsed_ms, 3),
+        lifecycle_state=gateway_ctx.lifecycle_state.value,
         message_count=len(inference_request.messages),
     )
-    return ctx, elapsed_ms
+    return gateway_ctx, elapsed_ms
 
 
 def placeholder_chat_response(ctx: GatewayRequestContext) -> dict[str, Any]:
-    """Contract-shaped response; inference path not connected."""
+    """Contract-shaped response; inference not connected. Request is at QUEUED."""
     created = int(ctx.received_timestamp.timestamp())
     return {
         "id": str(ctx.request_id),
@@ -104,8 +124,8 @@ def placeholder_chat_response(ctx: GatewayRequestContext) -> dict[str, Any]:
                 "message": {
                     "role": "assistant",
                     "content": (
-                        "Gateway validation complete. "
-                        "Scheduler and inference are not connected in Session 4."
+                        f"Request accepted and queued (lifecycle_state={ctx.lifecycle_state.value}). "
+                        "Scheduler and inference are not connected."
                     ),
                 },
                 "finish_reason": "stop",
@@ -130,8 +150,8 @@ def placeholder_text_completion_response(ctx: GatewayRequestContext) -> dict[str
             {
                 "index": 0,
                 "text": (
-                    "Gateway validation complete. "
-                    "Scheduler and inference are not connected in Session 4."
+                    f"Request accepted and queued (lifecycle_state={ctx.lifecycle_state.value}). "
+                    "Scheduler and inference are not connected."
                 ),
                 "finish_reason": "stop",
             }

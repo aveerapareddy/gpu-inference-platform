@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     require_api_key: bool = True
     # Comma-separated keys for demo; empty allows any non-empty bearer token.
     api_keys: str = ""
-    control_plane_stub_enabled: bool = True
+    control_plane_integrated: bool = True
 
 
 @lru_cache

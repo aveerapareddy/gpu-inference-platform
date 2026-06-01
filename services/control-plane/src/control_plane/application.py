@@ -11,6 +11,7 @@ from control_plane.config import Settings, get_settings
 from control_plane.lifecycle.manager import LifecycleManager
 from control_plane.observability.events import LifecycleEventEmitter
 from control_plane.registry.memory import InMemoryRequestRegistry
+from control_plane.registry.queries import RegistryQueries
 from control_plane.scheduler.client import SchedulerClient
 from control_plane.scheduler.stub import StubSchedulerClient
 
@@ -24,6 +25,7 @@ class ControlPlaneApplication:
     scheduler: SchedulerClient
     events: LifecycleEventEmitter
     lifecycle: LifecycleManager
+    queries: RegistryQueries
     _running: bool = False
 
     async def startup(self) -> None:
@@ -56,6 +58,7 @@ def create_application(settings: Settings | None = None) -> ControlPlaneApplicat
     scheduler: SchedulerClient = StubSchedulerClient()
     events = LifecycleEventEmitter(logger, settings.service_name)
     lifecycle = LifecycleManager(registry, admission, scheduler, events)
+    queries = RegistryQueries(registry)
     return ControlPlaneApplication(
         settings=settings,
         logger=logger,
@@ -64,4 +67,5 @@ def create_application(settings: Settings | None = None) -> ControlPlaneApplicat
         scheduler=scheduler,
         events=events,
         lifecycle=lifecycle,
+        queries=queries,
     )

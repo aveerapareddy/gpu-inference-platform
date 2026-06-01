@@ -92,8 +92,8 @@ Read order: `docs/overview/project-constitution.md` →
 | Shared schema package (Session 3) | Complete |
 | Observability package (Session 3) | Complete (scaffolding) |
 | Service scaffolds (Session 3) | Complete |
-| API gateway runtime | Session 4 — validation only (no inference) |
-| Control plane runtime | Session 5 — lifecycle only (no HTTP, no scheduler) |
+| API gateway runtime | Session 6 — integrated through QUEUED (no inference) |
+| Control plane runtime | Session 6 — embedded in gateway; lifecycle through QUEUED |
 | Scheduler runtime | Not started |
 | Inference adapter runtime | Not started |
 | Metrics collector runtime | Not started |

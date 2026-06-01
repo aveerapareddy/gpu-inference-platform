@@ -8,7 +8,12 @@ from fastapi import FastAPI
 from gpu_inference_observability import StructuredLogger
 
 from api_gateway.config import Settings, get_settings
-from api_gateway.dependencies import get_control_plane_client, get_logger
+from api_gateway.dependencies import (
+    get_control_plane_client,
+    get_logger,
+    shutdown_control_plane,
+    startup_control_plane,
+)
 from api_gateway.errors import GatewayError, gateway_error_handler, unhandled_error_handler
 from api_gateway.middleware import RequestTimingMiddleware
 from api_gateway.routers import completions, health
@@ -19,11 +24,13 @@ async def lifespan(app: FastAPI):
     settings: Settings = app.state.settings
     logger: StructuredLogger = app.state.logger
     logger.info("gateway starting", gateway_instance_id=settings.gateway_instance_id)
+    await startup_control_plane()
     control_plane = get_control_plane_client()
     app.state.control_plane = control_plane
     ready = await control_plane.is_ready()
     logger.info("control plane probe", ready=ready)
     yield
+    await shutdown_control_plane()
     logger.info("gateway shutdown")
 
 
@@ -34,7 +41,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="GPU Inference Platform API Gateway",
         version="0.1.0",
-        description="Session 4: validation and contract enforcement only.",
+        description="Session 6: gateway integrated with control plane lifecycle through QUEUED.",
         lifespan=lifespan,
     )
     app.state.settings = settings
