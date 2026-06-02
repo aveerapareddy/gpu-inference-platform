@@ -1,12 +1,19 @@
 [project]
 name = "gpu-inference-scheduler"
 version = "0.1.0"
-description = "Admission, queueing, and dispatch"
+description = "Work selection and scheduling decisions"
 requires-python = ">=3.11"
 dependencies = [
     "gpu-inference-common-schemas>=0.1.0",
     "gpu-inference-observability>=0.1.0",
+    "pydantic-settings>=2.6,<3",
 ]
+
+[project.optional-dependencies]
+control-plane = ["gpu-inference-control-plane>=0.1.0"]
+
+[project.scripts]
+gpu-inference-scheduler = "scheduler.main:run"
 
 [build-system]
 requires = ["hatchling"]
@@ -18,3 +25,4 @@ packages = ["src/scheduler"]
 [tool.uv.sources]
 gpu-inference-common-schemas = { path = "../../packages/common-schemas", editable = true }
 gpu-inference-observability = { path = "../../packages/observability", editable = true }
+gpu-inference-control-plane = { path = "../control-plane", editable = true }
