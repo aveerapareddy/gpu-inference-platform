@@ -47,6 +47,9 @@ class BatchService:
     def get_batch_statistics(self) -> BatchStatistics:
         return self._inspection.get_batch_statistics()
 
+    def get_batch_assignments(self, batch_id: UUID) -> list:
+        return self._engine.get_batch_assignments(batch_id)
+
     def list_active_requests(self) -> list:
         members = []
         for batch in self._engine.list_batches():

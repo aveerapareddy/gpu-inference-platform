@@ -95,7 +95,7 @@ Read order: `docs/overview/project-constitution.md` →
 | API gateway runtime | Session 6 — integrated through QUEUED (no inference) |
 | Control plane runtime | Session 7 — waiting queue through QUEUED (no scheduler) |
 | Scheduler runtime | Session 9 — continuous batch management (no inference) |
-| Inference adapter runtime | Not started |
+| Inference adapter runtime | Session 10 — backend contract + mock; no model execution |
 | Metrics collector runtime | Not started |
 | Operator console | Not started |
 | Infra (db, docker, k8s) | Not started |

@@ -6,7 +6,11 @@ requires-python = ">=3.11"
 dependencies = [
     "gpu-inference-common-schemas>=0.1.0",
     "gpu-inference-observability>=0.1.0",
+    "pydantic-settings>=2.6,<3",
 ]
+
+[project.scripts]
+gpu-inference-adapter = "inference_adapter.main:run"
 
 [build-system]
 requires = ["hatchling"]

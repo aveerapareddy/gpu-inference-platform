@@ -1,6 +1,6 @@
 # Scheduler
 
-Status: Session 9 — continuous batch management implemented
+Status: Session 10 — batch dispatch to inference adapter implemented
 Implementation: In-process with control plane queue reader; no HTTP server
 
 ## Ownership split
@@ -9,8 +9,9 @@ Implementation: In-process with control plane queue reader; no HTTP server
 | --- | --- | --- |
 | Work selection | Scheduler loop | FIFO scan, candidate selection |
 | Batch placement | Batching engine | Admission, membership, lifecycle |
+| Backend dispatch | Scheduler `BatchDispatchService` | Build `DispatchBatch`, submit via `AdapterClient` |
 | Queue storage | Control plane | Enqueue/dequeue, queue timing |
-| Inference | Not implemented | No token generation or GPU execution |
+| Backend execution | Inference adapter | Contract + mock acknowledge; no tokens |
 
 The scheduler selects work. The batching engine owns placement into managed batches.
 
@@ -19,7 +20,8 @@ The scheduler selects work. The batching engine owns placement into managed batc
 - Tick loop and queue inspection (read-only)
 - FIFO selection up to `max_candidate_requests`
 - Hand selected requests to batching engine each cycle
-- Events: `scheduler_cycle_*`, `request_selected`, `request_skipped`
+- Dispatch: `BatchDispatchService` submits `FILLING`/`READY`/`ACTIVE` batches to adapter after each cycle
+- `SchedulingResult.dispatch_results` records adapter accept/reject
 
 ## Batching responsibilities (implemented)
 
@@ -35,8 +37,7 @@ The scheduler selects work. The batching engine owns placement into managed batc
 ## Not implemented
 
 - HTTP APIs
-- Inference execution, token generation, vLLM
-- Dispatch to inference adapter
+- Inference execution, token generation, vLLM SDK
 - Lifecycle transition past `QUEUED`
 - Routing, streaming, priority/fairness tuning
 - Metrics backend export
@@ -50,7 +51,22 @@ Each cycle:
 3. Batching engine evaluates admission rules
 4. Accepted → `BatchPlacementDecision` with `BatchAssignment`
 5. Rejected → `BatchRejectionDecision` with reason
-6. `SchedulingResult` includes `placement_decisions` and `rejection_decisions`
+6. `SchedulingResult` includes `placement_decisions`, `rejection_decisions`, `dispatch_results`
+
+## Scheduler-to-adapter handoff (Session 10)
+
+After batch placement, `BatchDispatchService` builds `common_schemas.batch.Batch` from
+stored assignments and calls `AdapterClient.submit_batch()`. Adapter forwards to
+registered backend (mock by default). No routing; uses `SCHEDULER_DEFAULT_BACKEND_ID`.
+
+```python
+from inference_adapter import create_application
+from scheduler.integrations.embedded_adapter import EmbeddedAdapterClient
+
+adapter = create_application()
+await adapter.startup()
+sched = create_application(reader, adapter_client=EmbeddedAdapterClient(adapter))
+```
 
 Queue entries are not dequeued. Batch membership is separate from queue state.
 

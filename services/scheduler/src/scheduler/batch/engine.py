@@ -44,6 +44,7 @@ class ContinuousBatchEngine:
         self._sets: dict[UUID, ActiveRequestSet] = {}
         self._request_to_batch: dict[UUID, UUID] = {}
         self._active_batch_by_model: dict[str, UUID] = {}
+        self._assignments: dict[UUID, BatchAssignment] = {}
         self._lock = threading.RLock()
 
     @property
@@ -94,6 +95,22 @@ class ContinuousBatchEngine:
     def global_active_request_count(self) -> int:
         with self._lock:
             return sum(s.active_count() for s in self._sets.values())
+
+    def get_assignment(self, request_id: UUID) -> BatchAssignment | None:
+        with self._lock:
+            return self._assignments.get(request_id)
+
+    def get_batch_assignments(self, batch_id: UUID) -> list[BatchAssignment]:
+        with self._lock:
+            batch = self._batches.get(batch_id)
+            if batch is None:
+                return []
+            assignments: list[BatchAssignment] = []
+            for member in batch.active_members():
+                assignment = self._assignments.get(member.request_id)
+                if assignment is not None:
+                    assignments.append(assignment)
+            return assignments
 
     def _place_selected_locked(
         self,
@@ -184,6 +201,7 @@ class ContinuousBatchEngine:
             slot_index=member.slot_index,
             inference_request=item.inference_request,
         )
+        self._assignments[item.request_id] = assignment
         return BatchPlacementDecision(
             request_id=item.request_id,
             batch_id=batch.batch_id,

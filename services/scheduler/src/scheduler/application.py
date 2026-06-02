@@ -19,6 +19,10 @@ from scheduler.models.state import SchedulerSnapshot, SchedulerState
 from scheduler.observability.batch_events import BatchEventEmitter
 from scheduler.observability.events import SchedulerEventEmitter
 from scheduler.queue.reader import QueueReader
+from scheduler.dispatch.submitter import BatchDispatchService
+from scheduler.integrations.adapter import AdapterClient
+from scheduler.integrations.adapter import AdapterClient
+from scheduler.integrations.embedded_adapter import EmbeddedAdapterClient
 from scheduler.selection.fifo import FifoSelector
 
 
@@ -32,6 +36,7 @@ class SchedulerApplication:
     cycle_runner: SchedulingCycleRunner
     loop: SchedulerLoop
     batch: BatchService
+    dispatch: BatchDispatchService | None
     _running: bool = False
 
     async def startup(self) -> None:
@@ -65,7 +70,22 @@ class SchedulerApplication:
 
     async def run_scheduling_cycle(self) -> SchedulingResult:
         """Run one cycle without waiting for the tick loop."""
-        return await self.loop.run_once()
+        result = await self.loop.run_once()
+        if self.dispatch is not None and self.settings.dispatch_enabled:
+            dispatch_results = await self.dispatch.submit_pending_batches()
+            result = SchedulingResult(
+                cycle_id=result.cycle_id,
+                cycle_start_time=result.cycle_start_time,
+                cycle_end_time=result.cycle_end_time,
+                decisions=result.decisions,
+                selected_request_ids=result.selected_request_ids,
+                skipped_request_ids=result.skipped_request_ids,
+                placement_decisions=result.placement_decisions,
+                rejection_decisions=result.rejection_decisions,
+                dispatch_results=tuple(dispatch_results),
+                failure=result.failure,
+            )
+        return result
 
     def get_scheduler_snapshot(self) -> SchedulerSnapshot:
         last = self.state.last_completed_cycle
@@ -87,6 +107,8 @@ class SchedulerApplication:
 def create_application(
     queue_reader: QueueReader,
     settings: Settings | None = None,
+    *,
+    adapter_client: AdapterClient | None = None,
 ) -> SchedulerApplication:
     settings = settings or get_settings()
     logger = StructuredLogger(settings.service_name)
@@ -114,6 +136,13 @@ def create_application(
         state=state,
         tick_interval_ms=settings.tick_interval_ms,
     )
+    dispatch: BatchDispatchService | None = None
+    if adapter_client is not None:
+        dispatch = BatchDispatchService(
+            batch,
+            adapter_client,
+            backend_id=settings.default_backend_id,
+        )
     return SchedulerApplication(
         settings=settings,
         logger=logger,
@@ -123,4 +152,5 @@ def create_application(
         cycle_runner=cycle_runner,
         loop=loop,
         batch=batch,
+        dispatch=dispatch,
     )

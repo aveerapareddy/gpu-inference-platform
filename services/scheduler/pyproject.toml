@@ -11,6 +11,7 @@ dependencies = [
 
 [project.optional-dependencies]
 control-plane = ["gpu-inference-control-plane>=0.1.0"]
+adapter = ["gpu-inference-adapter>=0.1.0"]
 
 [project.scripts]
 gpu-inference-scheduler = "scheduler.main:run"
@@ -26,3 +27,4 @@ packages = ["src/scheduler"]
 gpu-inference-common-schemas = { path = "../../packages/common-schemas", editable = true }
 gpu-inference-observability = { path = "../../packages/observability", editable = true }
 gpu-inference-control-plane = { path = "../control-plane", editable = true }
+gpu-inference-adapter = { path = "../inference-adapter", editable = true }

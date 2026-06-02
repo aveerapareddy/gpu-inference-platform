@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     max_batch_size: int = Field(default=8, ge=1)
     max_active_requests: int = Field(default=32, ge=1)
     batch_admission_window_ms: int = Field(default=5000, ge=1)
+    default_backend_id: str = "mock"
+    dispatch_enabled: bool = True
 
 
 @lru_cache
