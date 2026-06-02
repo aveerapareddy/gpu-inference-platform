@@ -9,10 +9,14 @@ from common_schemas.states import SchedulerState as ProcessSchedulerState
 from gpu_inference_observability import StructuredLogger
 
 from scheduler.config import Settings, get_settings
+from scheduler.batch.admission import BatchAdmissionConfig
+from scheduler.batch.engine import ContinuousBatchEngine
+from scheduler.batch.service import BatchService
 from scheduler.loop.cycle import SchedulingCycleRunner
 from scheduler.loop.runner import SchedulerLoop
 from scheduler.models.decision import SchedulingResult
 from scheduler.models.state import SchedulerSnapshot, SchedulerState
+from scheduler.observability.batch_events import BatchEventEmitter
 from scheduler.observability.events import SchedulerEventEmitter
 from scheduler.queue.reader import QueueReader
 from scheduler.selection.fifo import FifoSelector
@@ -27,6 +31,7 @@ class SchedulerApplication:
     state: SchedulerState
     cycle_runner: SchedulingCycleRunner
     loop: SchedulerLoop
+    batch: BatchService
     _running: bool = False
 
     async def startup(self) -> None:
@@ -37,6 +42,8 @@ class SchedulerApplication:
             max_candidate_requests=self.settings.max_candidate_requests,
             scheduler_tick_interval_ms=self.settings.tick_interval_ms,
             queue_scan_limit=self.settings.queue_scan_limit,
+            max_batch_size=self.settings.max_batch_size,
+            max_active_requests=self.settings.max_active_requests,
         )
         self.state.process_mode = ProcessSchedulerState.ACCEPTING
         self._running = True
@@ -84,6 +91,14 @@ def create_application(
     settings = settings or get_settings()
     logger = StructuredLogger(settings.service_name)
     events = SchedulerEventEmitter(logger, settings.service_name)
+    batch_events = BatchEventEmitter(logger, settings.service_name)
+    batch_config = BatchAdmissionConfig(
+        max_batch_size=settings.max_batch_size,
+        max_active_requests=settings.max_active_requests,
+        batch_admission_window_ms=settings.batch_admission_window_ms,
+    )
+    batch_engine = ContinuousBatchEngine(batch_config, batch_events)
+    batch = BatchService(batch_engine)
     state = SchedulerState()
     selector = FifoSelector()
     cycle_runner = SchedulingCycleRunner(
@@ -92,6 +107,7 @@ def create_application(
         events=events,
         settings=settings,
         state=state,
+        batch=batch,
     )
     loop = SchedulerLoop(
         cycle_runner=cycle_runner,
@@ -106,4 +122,5 @@ def create_application(
         state=state,
         cycle_runner=cycle_runner,
         loop=loop,
+        batch=batch,
     )

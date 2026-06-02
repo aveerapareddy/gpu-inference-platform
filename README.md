@@ -94,7 +94,7 @@ Read order: `docs/overview/project-constitution.md` →
 | Service scaffolds (Session 3) | Complete |
 | API gateway runtime | Session 6 — integrated through QUEUED (no inference) |
 | Control plane runtime | Session 7 — waiting queue through QUEUED (no scheduler) |
-| Scheduler runtime | Session 8 — FIFO decision loop; no batching or inference |
+| Scheduler runtime | Session 9 — continuous batch management (no inference) |
 | Inference adapter runtime | Not started |
 | Metrics collector runtime | Not started |
 | Operator console | Not started |

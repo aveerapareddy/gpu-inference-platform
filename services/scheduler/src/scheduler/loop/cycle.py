@@ -9,6 +9,8 @@ from uuid import uuid4
 from common_schemas.states import SchedulerState as ProcessSchedulerState
 
 from scheduler.config import Settings
+from scheduler.batch.service import BatchService
+from scheduler.models.batch_decision import BatchPlacementDecision, BatchRejectionDecision
 from scheduler.models.decision import SchedulingFailure, SchedulingResult
 from scheduler.models.state import SchedulerCycle, SchedulerState
 from scheduler.observability.events import SchedulerEventEmitter, SchedulerEventType
@@ -26,12 +28,14 @@ class SchedulingCycleRunner:
         events: SchedulerEventEmitter,
         settings: Settings,
         state: SchedulerState,
+        batch: BatchService,
     ) -> None:
         self._queue = queue_reader
         self._selector = selector
         self._events = events
         self._settings = settings
         self._state = state
+        self._batch = batch
         self._lock = threading.Lock()
 
     def run_cycle(self) -> SchedulingResult:
@@ -53,6 +57,7 @@ class SchedulingCycleRunner:
 
         try:
             items = self._queue.list_queue_items(limit=self._settings.queue_scan_limit)
+            item_by_id = {item.request_id: item for item in items}
             candidates = items_to_candidates(items)
 
             decisions, selected, skipped = self._selector.evaluate(
@@ -60,11 +65,34 @@ class SchedulingCycleRunner:
                 max_candidate_requests=self._settings.max_candidate_requests,
             )
 
+            placements: list[BatchPlacementDecision] = []
+            rejections: list[BatchRejectionDecision] = []
+            for request_id in selected:
+                item = item_by_id.get(request_id)
+                if item is None:
+                    rejections.append(
+                        BatchRejectionDecision(
+                            request_id=request_id,
+                            decision_reason="queue_item_not_found",
+                            correlation_id="",
+                        )
+                    )
+                    continue
+                outcome = self._batch.place_selected(item)
+                if isinstance(outcome, BatchPlacementDecision):
+                    placements.append(outcome)
+                else:
+                    rejections.append(outcome)
+
             cycle.selected_requests = [str(rid) for rid in selected]
             cycle.skipped_requests = [str(rid) for rid in skipped]
             cycle.decisions = decisions
 
-            summary_reason = _cycle_summary_reason(len(selected), len(skipped), len(candidates))
+            summary_reason = _cycle_summary_reason(
+                len(placements),
+                len(skipped) + len(rejections),
+                len(candidates),
+            )
             cycle.complete(decision_reason=summary_reason)
 
             for decision in decisions:
@@ -99,6 +127,8 @@ class SchedulingCycleRunner:
                 decisions=tuple(decisions),
                 selected_request_ids=tuple(selected),
                 skipped_request_ids=tuple(skipped),
+                placement_decisions=tuple(placements),
+                rejection_decisions=tuple(rejections),
                 failure=None,
             )
 
@@ -108,6 +138,8 @@ class SchedulingCycleRunner:
                 decision_reason=summary_reason,
                 extra={
                     "selected_count": len(selected),
+                    "placed_count": len(placements),
+                    "batch_rejected_count": len(rejections),
                     "skipped_count": len(skipped),
                     "candidate_count": len(candidates),
                 },

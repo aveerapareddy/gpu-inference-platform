@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     max_candidate_requests: int = Field(default=10, ge=1)
     tick_interval_ms: int = Field(default=1000, ge=100)
     queue_scan_limit: int = Field(default=100, ge=1)
+    max_batch_size: int = Field(default=8, ge=1)
+    max_active_requests: int = Field(default=32, ge=1)
+    batch_admission_window_ms: int = Field(default=5000, ge=1)
 
 
 @lru_cache
