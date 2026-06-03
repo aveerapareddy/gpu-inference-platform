@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from gpu_inference_observability import StructuredLogger
+from gpu_inference_observability.runtime.recorder import RuntimeEventRecorder
 
 from control_plane.admission.framework import AdmissionFramework
 from control_plane.config import Settings, get_settings
@@ -58,13 +59,17 @@ class ControlPlaneApplication:
         return self._running
 
 
-def create_application(settings: Settings | None = None) -> ControlPlaneApplication:
+def create_application(
+    settings: Settings | None = None,
+    *,
+    trace_recorder: RuntimeEventRecorder | None = None,
+) -> ControlPlaneApplication:
     settings = settings or get_settings()
     logger = StructuredLogger(settings.service_name)
     registry = InMemoryRequestRegistry(max_entries=settings.registry_max_entries)
     admission = AdmissionFramework()
     scheduler: SchedulerClient = StubSchedulerClient()
-    events = LifecycleEventEmitter(logger, settings.service_name)
+    events = LifecycleEventEmitter(logger, settings.service_name, trace_recorder=trace_recorder)
     queue_config = QueueCapacityConfig(
         max_queue_size=settings.max_queue_size,
         queue_timeout_ms=settings.queue_timeout_ms,

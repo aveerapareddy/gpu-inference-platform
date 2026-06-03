@@ -7,6 +7,7 @@ from uuid import UUID
 
 from common_schemas.batch import Batch as DispatchBatch
 from gpu_inference_observability import StructuredLogger
+from gpu_inference_observability.runtime.recorder import RuntimeEventRecorder
 
 from inference_adapter.backend.failures import (
     BackendInternalFailure,
@@ -133,6 +134,14 @@ class InferenceAdapterApplication:
             reason="submit_batch",
             extra={"assignment_count": len(batch.assignments)},
         )
+        for assignment in batch.assignments:
+            self._emit_request_backend_event(
+                BackendEventType.BATCH_SUBMITTED,
+                backend_id=target_id,
+                batch_id=batch.batch_id,
+                request_id=assignment.request_id,
+                reason="submit_batch",
+            )
 
         backend = entry.backend
         try:
@@ -153,6 +162,14 @@ class InferenceAdapterApplication:
                 batch_id=batch.batch_id,
                 reason=result.reason,
             )
+            for assignment in batch.assignments:
+                self._emit_request_backend_event(
+                    BackendEventType.BATCH_ACCEPTED,
+                    backend_id=target_id,
+                    batch_id=batch.batch_id,
+                    request_id=assignment.request_id,
+                    reason=result.reason,
+                )
         else:
             self.events.emit(
                 BackendEventType.BATCH_REJECTED,
@@ -160,7 +177,38 @@ class InferenceAdapterApplication:
                 batch_id=batch.batch_id,
                 reason=result.reason,
             )
+            for assignment in batch.assignments:
+                self._emit_request_backend_event(
+                    BackendEventType.BATCH_REJECTED,
+                    backend_id=target_id,
+                    batch_id=batch.batch_id,
+                    request_id=assignment.request_id,
+                    reason=result.reason,
+                )
         return result
+
+    def _emit_request_backend_event(
+        self,
+        event_type: BackendEventType,
+        *,
+        backend_id: str,
+        batch_id: UUID,
+        request_id: UUID,
+        reason: str | None = None,
+    ) -> None:
+        correlation_id: str | None = None
+        if self.events._recorder is not None:
+            existing = self.events._recorder.store.get(request_id)
+            if existing is not None:
+                correlation_id = existing.context.correlation_id
+        self.events.emit(
+            event_type,
+            backend_id=backend_id,
+            batch_id=batch_id,
+            request_id=request_id,
+            correlation_id=correlation_id,
+            reason=reason,
+        )
 
     async def get_request_status(
         self,
@@ -183,11 +231,15 @@ class InferenceAdapterApplication:
         return await backend.cancel_request(request_id)
 
 
-def create_application(settings: Settings | None = None) -> InferenceAdapterApplication:
+def create_application(
+    settings: Settings | None = None,
+    *,
+    trace_recorder: RuntimeEventRecorder | None = None,
+) -> InferenceAdapterApplication:
     settings = settings or get_settings()
     logger = StructuredLogger(settings.service_name)
     registry = BackendRegistry()
-    events = BackendEventEmitter(logger, settings.service_name)
+    events = BackendEventEmitter(logger, settings.service_name, trace_recorder=trace_recorder)
     app = InferenceAdapterApplication(
         settings=settings,
         logger=logger,

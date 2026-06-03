@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from common_schemas.states import SchedulerState as ProcessSchedulerState
 from gpu_inference_observability import StructuredLogger
+from gpu_inference_observability.runtime.recorder import RuntimeEventRecorder
 
 from scheduler.config import Settings, get_settings
 from scheduler.batch.admission import BatchAdmissionConfig
@@ -109,11 +110,12 @@ def create_application(
     settings: Settings | None = None,
     *,
     adapter_client: AdapterClient | None = None,
+    trace_recorder: RuntimeEventRecorder | None = None,
 ) -> SchedulerApplication:
     settings = settings or get_settings()
     logger = StructuredLogger(settings.service_name)
-    events = SchedulerEventEmitter(logger, settings.service_name)
-    batch_events = BatchEventEmitter(logger, settings.service_name)
+    events = SchedulerEventEmitter(logger, settings.service_name, trace_recorder=trace_recorder)
+    batch_events = BatchEventEmitter(logger, settings.service_name, trace_recorder=trace_recorder)
     batch_config = BatchAdmissionConfig(
         max_batch_size=settings.max_batch_size,
         max_active_requests=settings.max_active_requests,

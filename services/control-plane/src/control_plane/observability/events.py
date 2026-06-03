@@ -8,6 +8,13 @@ from typing import Any
 from uuid import UUID
 
 from gpu_inference_observability import LogContext, StructuredLogger
+from gpu_inference_observability.runtime.models import (
+    FailureEventRecord,
+    LifecycleEventRecord,
+    QueueEventRecord,
+    RuntimeComponent,
+)
+from gpu_inference_observability.runtime.recorder import RuntimeEventRecorder
 
 
 class LifecycleEventType(StrEnum):
@@ -33,10 +40,23 @@ class QueueEventType(StrEnum):
     REQUEST_QUEUED = "request_queued"
 
 
+def _parse_timestamp(timestamp: str | None) -> datetime:
+    if timestamp is None:
+        return datetime.now(timezone.utc)
+    return datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+
+
 class LifecycleEventEmitter:
-    def __init__(self, logger: StructuredLogger, service_name: str) -> None:
+    def __init__(
+        self,
+        logger: StructuredLogger,
+        service_name: str,
+        *,
+        trace_recorder: RuntimeEventRecorder | None = None,
+    ) -> None:
         self._logger = logger
         self._service_name = service_name
+        self._recorder = trace_recorder
 
     def emit(
         self,
@@ -77,6 +97,43 @@ class LifecycleEventEmitter:
         if extra:
             fields.update(extra)
         self._logger.info(event_type.value, ctx=ctx, **fields)
+        if self._recorder is not None:
+            ts = _parse_timestamp(timestamp)
+            batch_id = (extra or {}).get("batch_id")
+            backend_id = (extra or {}).get("backend_id")
+            self._recorder.record_lifecycle(
+                LifecycleEventRecord(
+                    request_id=request_id,
+                    correlation_id=correlation_id or "",
+                    timestamp=ts,
+                    component=RuntimeComponent.CONTROL_PLANE,
+                    event_type=event_type.value,
+                    lifecycle_state=lifecycle_state,
+                    from_state=from_state,
+                    to_state=to_state,
+                    batch_id=batch_id,
+                    backend_id=backend_id,
+                    extra=extra or {},
+                )
+            )
+            if failure_reason and event_type in {
+                LifecycleEventType.REQUEST_FAILED,
+                LifecycleEventType.REQUEST_REJECTED,
+            }:
+                self._recorder.record_failure(
+                    FailureEventRecord(
+                        request_id=request_id,
+                        correlation_id=correlation_id or "",
+                        timestamp=ts,
+                        component=RuntimeComponent.CONTROL_PLANE,
+                        event_type=event_type.value,
+                        failure_type=event_type.value,
+                        failure_reason=failure_reason,
+                        failure_state=to_state or lifecycle_state or "unknown",
+                        batch_id=batch_id,
+                        backend_id=backend_id,
+                    )
+                )
 
     def emit_queue(
         self,
@@ -107,3 +164,32 @@ class LifecycleEventEmitter:
             model=model,
         )
         self._logger.info(event_type.value, ctx=ctx, **fields)
+        if self._recorder is not None:
+            recorded_at = _parse_timestamp(ts)
+            self._recorder.record_queue(
+                QueueEventRecord(
+                    request_id=request_id,
+                    correlation_id=correlation_id or "",
+                    timestamp=recorded_at,
+                    component=RuntimeComponent.CONTROL_PLANE,
+                    event_type=event_type.value,
+                    queue_position=queue_position,
+                    extra=extra or {},
+                )
+            )
+            if event_type in {QueueEventType.QUEUE_FULL, QueueEventType.QUEUE_TIMEOUT}:
+                reason = (extra or {}).get("reason", event_type.value)
+                self._recorder.record_failure(
+                    FailureEventRecord(
+                        request_id=request_id,
+                        correlation_id=correlation_id or "",
+                        timestamp=recorded_at,
+                        component=RuntimeComponent.CONTROL_PLANE,
+                        event_type=event_type.value,
+                        failure_type=event_type.value,
+                        failure_reason=str(reason),
+                        failure_state="rejected"
+                        if event_type == QueueEventType.QUEUE_FULL
+                        else "timed_out",
+                    )
+                )

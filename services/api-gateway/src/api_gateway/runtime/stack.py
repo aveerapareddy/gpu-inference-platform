@@ -5,6 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from control_plane.application import ControlPlaneApplication, create_application as create_cp
+from gpu_inference_observability.runtime.inspection import TraceInspector
+from gpu_inference_observability.runtime.recorder import RuntimeEventRecorder
+from gpu_inference_observability.runtime.store import RequestTraceStore
 from inference_adapter.application import InferenceAdapterApplication, create_application as create_adapter
 from scheduler import ControlPlaneQueueReader, create_application as create_scheduler
 from scheduler.integrations.embedded_adapter import EmbeddedAdapterClient
@@ -15,6 +18,9 @@ class PlatformStack:
     control_plane: ControlPlaneApplication
     scheduler: object
     adapter: InferenceAdapterApplication
+    trace_store: RequestTraceStore | None = None
+    trace_recorder: RuntimeEventRecorder | None = None
+    trace_inspector: TraceInspector | None = None
 
     async def startup(self) -> None:
         await self.control_plane.startup()
@@ -28,10 +34,21 @@ class PlatformStack:
 
 
 def create_platform_stack() -> PlatformStack:
-    cp = create_cp()
-    adapter = create_adapter()
+    trace_store = RequestTraceStore()
+    trace_recorder = RuntimeEventRecorder(trace_store)
+    trace_inspector = TraceInspector(trace_store)
+    cp = create_cp(trace_recorder=trace_recorder)
+    adapter = create_adapter(trace_recorder=trace_recorder)
     scheduler = create_scheduler(
         ControlPlaneQueueReader(cp.queue),
         adapter_client=EmbeddedAdapterClient(adapter),
+        trace_recorder=trace_recorder,
     )
-    return PlatformStack(control_plane=cp, scheduler=scheduler, adapter=adapter)
+    return PlatformStack(
+        control_plane=cp,
+        scheduler=scheduler,
+        adapter=adapter,
+        trace_store=trace_store,
+        trace_recorder=trace_recorder,
+        trace_inspector=trace_inspector,
+    )

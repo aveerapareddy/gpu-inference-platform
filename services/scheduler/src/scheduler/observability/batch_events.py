@@ -8,6 +8,8 @@ from typing import Any
 from uuid import UUID
 
 from gpu_inference_observability import LogContext, StructuredLogger
+from gpu_inference_observability.runtime.models import BatchEventRecord, RuntimeComponent
+from gpu_inference_observability.runtime.recorder import RuntimeEventRecorder
 
 
 class BatchEventType(StrEnum):
@@ -21,9 +23,16 @@ class BatchEventType(StrEnum):
 
 
 class BatchEventEmitter:
-    def __init__(self, logger: StructuredLogger, service_name: str) -> None:
+    def __init__(
+        self,
+        logger: StructuredLogger,
+        service_name: str,
+        *,
+        trace_recorder: RuntimeEventRecorder | None = None,
+    ) -> None:
         self._logger = logger
         self._service_name = service_name
+        self._recorder = trace_recorder
 
     def emit(
         self,
@@ -56,3 +65,17 @@ class BatchEventEmitter:
             model=model,
         )
         self._logger.info(event_type.value, ctx=ctx, **fields)
+        if self._recorder is not None and request_id is not None:
+            recorded_at = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            self._recorder.record_batch(
+                BatchEventRecord(
+                    request_id=request_id,
+                    correlation_id=correlation_id,
+                    timestamp=recorded_at,
+                    component=RuntimeComponent.SCHEDULER,
+                    event_type=event_type.value,
+                    batch_id=str(batch_id) if batch_id is not None else None,
+                    decision_reason=decision_reason,
+                    extra=extra or {},
+                )
+            )

@@ -40,6 +40,12 @@ class IntegratedPlatformClient:
 
     async def accept_request(self, submit: SubmitRequest) -> AcceptRequestResult:
         try:
+            if self._stack.trace_recorder is not None:
+                self._stack.trace_recorder.record_gateway_receive(
+                    request_id=submit.inference_request.request_id,
+                    correlation_id=submit.request_context.trace_id,
+                    extra={"model": submit.inference_request.model},
+                )
             entry = await self._orchestrator.execute_full_path(submit)
             if entry.state == RequestState.REJECTED:
                 _raise_admission_error(entry)

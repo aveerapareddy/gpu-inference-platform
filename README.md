@@ -1,6 +1,6 @@
 # GPU Inference Platform
 
-Status: Foundation through Session 11 — embedded full request path (mock backend)
+Status: Foundation through Session 12 — runtime observability (in-memory traces)
 
 ## Engineering thesis
 
@@ -89,11 +89,12 @@ Read order: `docs/overview/project-constitution.md` →
 | Platform contracts (Session 2) | Complete |
 | Shared schema package (Session 3) | Complete |
 | Observability package (Session 3) | Complete (scaffolding) |
+| Runtime observability (Session 12) | Complete — trace store, events, timing, metrics models, snapshots (in-memory) |
 | Service scaffolds (Session 3) | Complete |
-| API gateway runtime | Session 11 — full path to COMPLETED (mock backend) |
-| Control plane runtime | Session 11 — lifecycle through COMPLETED |
-| Scheduler runtime | Session 11 — integrated dispatch in gateway stack |
-| Inference adapter runtime | Session 11 — mock backend in gateway stack |
+| API gateway runtime | Session 12 — trace recording on integrated path |
+| Control plane runtime | Session 12 — lifecycle/queue events recorded to trace store |
+| Scheduler runtime | Session 12 — scheduler/batch events recorded to trace store |
+| Inference adapter runtime | Session 12 — per-request backend events recorded |
 | Metrics collector runtime | Not started |
 | Operator console | Not started |
 | Infra (db, docker, k8s) | Not started |
