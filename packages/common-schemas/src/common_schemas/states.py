@@ -23,6 +23,8 @@ class RequestState(StrEnum):
     ADMITTED = "admitted"
     QUEUED = "queued"
     SCHEDULED = "scheduled"
+    BATCHED = "batched"
+    SUBMITTED = "submitted"
     PREFILLING = "prefilling"
     DECODING = "decoding"
     STREAMING = "streaming"

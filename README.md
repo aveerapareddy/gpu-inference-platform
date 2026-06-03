@@ -1,8 +1,6 @@
 # GPU Inference Platform
 
-Status: Foundation Phase (Session 3 complete)
-Implementation: Shared packages only; service runtime not started
-Current Milestone: Serving Phase — API gateway HTTP surface (no scheduler logic yet)
+Status: Foundation through Session 11 — embedded full request path (mock backend)
 
 ## Engineering thesis
 
@@ -92,10 +90,10 @@ Read order: `docs/overview/project-constitution.md` →
 | Shared schema package (Session 3) | Complete |
 | Observability package (Session 3) | Complete (scaffolding) |
 | Service scaffolds (Session 3) | Complete |
-| API gateway runtime | Session 6 — integrated through QUEUED (no inference) |
-| Control plane runtime | Session 7 — waiting queue through QUEUED (no scheduler) |
-| Scheduler runtime | Session 9 — continuous batch management (no inference) |
-| Inference adapter runtime | Session 10 — backend contract + mock; no model execution |
+| API gateway runtime | Session 11 — full path to COMPLETED (mock backend) |
+| Control plane runtime | Session 11 — lifecycle through COMPLETED |
+| Scheduler runtime | Session 11 — integrated dispatch in gateway stack |
+| Inference adapter runtime | Session 11 — mock backend in gateway stack |
 | Metrics collector runtime | Not started |
 | Operator console | Not started |
 | Infra (db, docker, k8s) | Not started |

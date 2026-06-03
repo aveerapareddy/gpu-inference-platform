@@ -44,10 +44,21 @@ class BatchDispatchService:
             if dispatch is None:
                 continue
 
-            adapter_result = await self._adapter.submit_batch(
-                dispatch,
-                backend_id=self._backend_id,
-            )
+            try:
+                adapter_result = await self._adapter.submit_batch(
+                    dispatch,
+                    backend_id=self._backend_id,
+                )
+            except Exception as exc:
+                results.append(
+                    BatchDispatchResult(
+                        batch_id=batch_key,
+                        backend_id=self._backend_id,
+                        accepted=False,
+                        reason=str(exc),
+                    )
+                )
+                continue
             if adapter_result.accepted:
                 self._submitted_batch_ids.add(batch_key)
 

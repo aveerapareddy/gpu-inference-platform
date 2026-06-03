@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     # Comma-separated keys for demo; empty allows any non-empty bearer token.
     api_keys: str = ""
     control_plane_integrated: bool = True
+    full_path_integrated: bool = True
 
 
 @lru_cache

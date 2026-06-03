@@ -1,6 +1,6 @@
 # Scheduler
 
-Status: Session 10 — batch dispatch to inference adapter implemented
+Status: Session 11 — integrated in gateway full path through mock completion
 Implementation: In-process with control plane queue reader; no HTTP server
 
 ## Ownership split

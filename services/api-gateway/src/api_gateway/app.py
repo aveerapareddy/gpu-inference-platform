@@ -41,7 +41,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="GPU Inference Platform API Gateway",
         version="0.1.0",
-        description="Session 6: gateway integrated with control plane lifecycle through QUEUED.",
+        description="Session 11: full embedded path through mock backend completion.",
         lifespan=lifespan,
     )
     app.state.settings = settings

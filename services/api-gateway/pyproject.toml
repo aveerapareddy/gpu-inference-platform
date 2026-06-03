@@ -7,6 +7,8 @@ dependencies = [
     "gpu-inference-common-schemas>=0.1.0",
     "gpu-inference-observability>=0.1.0",
     "gpu-inference-control-plane>=0.1.0",
+    "gpu-inference-scheduler>=0.1.0",
+    "gpu-inference-adapter>=0.1.0",
     "fastapi>=0.115,<1",
     "uvicorn[standard]>=0.32,<1",
     "pydantic-settings>=2.6,<3",
@@ -29,6 +31,8 @@ packages = ["src/api_gateway"]
 gpu-inference-common-schemas = { path = "../../packages/common-schemas", editable = true }
 gpu-inference-observability = { path = "../../packages/observability", editable = true }
 gpu-inference-control-plane = { path = "../control-plane", editable = true }
+gpu-inference-scheduler = { path = "../scheduler", editable = true }
+gpu-inference-adapter = { path = "../inference-adapter", editable = true }
 
 [tool.ruff]
 line-length = 100

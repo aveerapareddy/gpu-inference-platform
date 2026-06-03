@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from uuid import UUID
 
 from common_schemas.inference_request import InferenceRequest, RequestContext, SubmitRequest
 from common_schemas.states import FailureReason, RequestState
@@ -19,6 +20,8 @@ class RegisteredRequest:
     failure_message: str | None = None
     queue_entered_at: datetime | None = None
     queue_position: int | None = None
+    batch_id: UUID | None = None
+    backend_id: str | None = None
 
     @property
     def request_id(self):

@@ -12,6 +12,8 @@
         "admitted",
         "queued",
         "scheduled",
+        "batched",
+        "submitted",
         "prefilling",
         "decoding",
         "streaming",

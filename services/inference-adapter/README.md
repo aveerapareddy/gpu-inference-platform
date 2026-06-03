@@ -1,6 +1,6 @@
 # Inference Adapter
 
-Status: Session 10 — backend abstraction implemented
+Status: Session 11 — integrated in gateway full path; mock acknowledges batches
 Implementation: In-process; mock backend registered by default; no HTTP server
 
 ## Ownership

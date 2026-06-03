@@ -1,93 +1,55 @@
 # Control Plane
 
-Status: Session 7 — queue ownership implemented
-Implementation: In-process with API gateway; waiting queue through QUEUED; no scheduler
+Status: Session 11 — lifecycle through COMPLETED via gateway orchestration
+Implementation: Embedded in gateway full path; queue through terminal states
 
 ## Ownership
 
 Process: `services/control-plane`. Package: `control_plane`.
 
-Per-request lifecycle through `QUEUED`. The waiting queue owns admitted workload
-until a scheduler exists. The queue does not schedule, batch, or run inference.
+Owns request registry and lifecycle transitions. Queue owns waiting workload
+through `QUEUED`. Scheduler and adapter drive transitions past `QUEUED` when
+gateway `RequestPathOrchestrator` runs.
 
 ## Responsibilities (implemented)
 
-- Application bootstrap with `startup()` / `shutdown()`
-- Request registry and lifecycle manager
-- **Waiting queue** (`queue/`): FIFO enqueue, dequeue, peek, size, contains, remove, clear
-- Queue data structures: `QueuedRequest`, `WaitingQueue`, `QueueSnapshot`, `QueueStatistics`
-- Queue timing: `queue_entered_at`, `queue_position`, `queue_wait_duration_ms`, `request_age_ms`
-- Capacity: `max_queue_size`, `queue_timeout_ms`; overflow → `REJECTED` (`queue_full`)
-- Queue events: `request_enqueued`, `request_dequeued`, `queue_full`, `queue_timeout`, `queue_removed`
-- Inspection: `get_queue_snapshot()`, `get_queue_statistics()`, `list_queued_requests()`
-- Gateway handoff: `RECEIVED` → `VALIDATED` → `ADMITTED` → enqueue → `QUEUED`
+- Registry with `batch_id`, `backend_id` trace fields on `RegisteredRequest`
+- Lifecycle manager: transitions through `COMPLETED` including `BATCHED`, `SUBMITTED`
+- Events: `request_scheduled`, `request_batched`, `request_submitted`, `request_completed`
+- Waiting queue (FIFO, capacity, timeout)
+- `complete_request()` for simulated completion (no tokens)
+- Failure marking with trace fields
 
 ## Responsibilities (not implemented)
 
-- HTTP APIs
-- Priority ordering (FIFO only)
-- Scheduler dequeue driving lifecycle past `QUEUED`
-- Batching, routing, inference, streaming
-- Persistence, Prometheus export
+- Standalone HTTP server
+- Direct scheduler/adapter calls (gateway orchestrator coordinates)
+- Persistence, routing, inference execution
 
-## Lifecycle and queue (Session 7 stopping point)
+## Lifecycle (Session 11 integrated path)
 
 ```
-RECEIVED → VALIDATED → ADMITTED → [enqueue] → QUEUED (in waiting queue)
+RECEIVED → VALIDATED → ADMITTED → QUEUED
+  → SCHEDULED → BATCHED → SUBMITTED → COMPLETED
 ```
 
-On enqueue:
+Failure terminals: `REJECTED`, `FAILED`, `TIMED_OUT`, `CANCELLED`.
 
-- Registry state → `QUEUED`
-- `queue_entered_at` and `queue_position` recorded on `RegisteredRequest`
-- `request_enqueued` event emitted with position and correlation id
+Transitions defined in `lifecycle/transitions.py`. Invalid transitions raise
+`InvalidTransitionError`.
 
-On capacity exceeded:
+## Integration
 
-- `queue_full` event
-- Request → `REJECTED` (not enqueued)
+Gateway embeds control plane via `PlatformStack`. Orchestrator calls
+`process_through_queued()` then applies post-queue transitions from scheduler
+and adapter outcomes.
 
-On queue timeout:
-
-- `queue_timeout` event
-- Request → `TIMED_OUT` (removed from queue)
-
-## Queue operations
-
-| Operation | Behavior |
-| --- | --- |
-| `enqueue` | Tail append; assign position; reject if at `max_queue_size` |
-| `dequeue` | Remove head (for future scheduler) |
-| `peek` | View head without remove |
-| `size` / `contains` | Queue depth and membership |
-| `remove` | Remove arbitrary id; emit `queue_removed` |
-| `clear` | Drop all waiting items |
+See `docs/workflows/end-to-end-request-execution.md`.
 
 ## Configuration
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `CONTROL_PLANE_MAX_QUEUE_SIZE` | 1000 | Max waiting requests |
-| `CONTROL_PLANE_QUEUE_TIMEOUT_MS` | 300000 | Max wait in queue before `TIMED_OUT` |
+| `CONTROL_PLANE_QUEUE_TIMEOUT_MS` | 300000 | Queue wait timeout |
 | `CONTROL_PLANE_REGISTRY_MAX_ENTRIES` | 10000 | Registry capacity |
-
-## Inspection (internal)
-
-```python
-app.queue.get_queue_snapshot()
-app.queue.get_queue_statistics()
-app.queue.list_queued_requests()
-```
-
-## Layout
-
-```
-src/control_plane/
-  queue/
-    models.py           data structures
-    waiting_queue.py    FIFO operations
-    capacity.py         overflow rules
-    service.py          enqueue_from_admitted
-    inspection.py       snapshot and stats
-  lifecycle/manager.py  calls queue after ADMITTED
-```

@@ -1,52 +1,53 @@
 # API Gateway
 
-Status: Session 6 — integrated with control plane through QUEUED
-Implementation: HTTP server runs; requests registered and queued; no inference
+Status: Session 11 — full embedded request path through mock backend
+Implementation: HTTP server; lifecycle completes at COMPLETED; no model tokens
 
 ## Ownership
 
 Process: `services/api-gateway`. Package: `api_gateway`.
 
+Orchestrates validation and embeds control plane, scheduler, and inference adapter
+when `GATEWAY_FULL_PATH_INTEGRATED=true` (default).
+
 ## Responsibilities (implemented)
 
 - OpenAI-compatible HTTP (`POST /v1/chat/completions`, `POST /v1/completions`)
 - Bearer API key validation, body size and schema validation
-- Unsupported field rejection
-- Model lookup (stub registry: `demo`, `example-model`)
-- `RequestContext` and `InferenceRequest` construction
-- Handoff to embedded control plane: lifecycle through `QUEUED`
+- Full embedded path: gateway → control plane → queue → scheduler → batch → adapter → mock
+- Lifecycle through `COMPLETED` on success
+- Trace propagation: `request_id`, `correlation_id`, `batch_id`, `backend_id`
 - Correlation headers (`X-Correlation-Id`, `X-Request-Id`)
 - Structured logging and request timing middleware
 - `GET /health`, `GET /ready`, `GET /version`
-- OpenAI-shaped errors including admission rejections from control plane
 
 ## Responsibilities (not implemented)
 
-- Scheduler submit or inference execution
+- Real model completions or token generation
 - Streaming (`stream=true` returns HTTP 501)
-- Real model completions (placeholder JSON only)
-- HTTP to separate control-plane process (in-process integration only)
-- Prometheus metrics, distributed tracing export
-- Rate limiting
+- Separate-process service HTTP (in-process only)
+- vLLM, GPU execution, routing
+- Prometheus export, rate limiting
 
-## Request flow (Session 6)
+## Request flow (Session 11)
 
 ```
-Client POST
-  → Gateway: auth, parse, validate
-  → Gateway: build SubmitRequest + RequestContext
-  → Control Plane: RECEIVED → VALIDATED → ADMITTED → QUEUED
-  → Gateway: placeholder completion response
+POST /v1/chat/completions
+  → validate + SubmitRequest
+  → RequestPathOrchestrator.execute_full_path()
+  → COMPLETED (or REJECTED / FAILED)
+  → placeholder JSON response
 ```
 
-Admission rejections return HTTP 429/400 with structured `error` body.
-Internal control plane errors return HTTP 500 and `FAILED` in registry when possible.
+See `docs/workflows/end-to-end-request-execution.md`.
 
 ## Run locally
 
 ```bash
 pip install -e packages/common-schemas -e packages/observability \
-  -e services/control-plane -e services/api-gateway
+  -e services/control-plane -e services/scheduler \
+  -e services/inference-adapter -e services/api-gateway
+
 GATEWAY_API_KEYS=dev-key gpu-inference-gateway
 ```
 
@@ -56,29 +57,30 @@ curl -s -H "Authorization: Bearer dev-key" -H "Content-Type: application/json" \
   http://localhost:8080/v1/chat/completions
 ```
 
-Response message includes `lifecycle_state=queued`.
+Response includes `lifecycle_state=completed`.
 
 ## Configuration
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `GATEWAY_API_KEYS` | empty | Comma-separated allowlist |
-| `GATEWAY_CONTROL_PLANE_INTEGRATED` | true | Embed control plane in gateway process |
-
-## Contracts
-
-- `api-specs/openapi.yaml`
-- `docs/contracts/openai-api.md`
-- `docs/workflows/request-serving-workflow.md`
+| `GATEWAY_FULL_PATH_INTEGRATED` | true | Embed CP + scheduler + adapter |
+| `GATEWAY_CONTROL_PLANE_INTEGRATED` | true | Used when full path disabled |
 
 ## Layout
 
 ```
 src/api_gateway/
-  app.py
-  pipeline.py              validate + control plane handoff
-  control_plane/
-    integrated.py          IntegratedControlPlaneClient
-    client.py              protocol
-  routers/                 health, completions
+  runtime/
+    stack.py                 PlatformStack wiring
+    orchestrator.py          full path execution
+    integrated_client.py     ControlPlaneClient for Session 11
+  pipeline.py
+  dependencies.py
+```
+
+## Validation
+
+```bash
+python tests/integration/session11_scenarios.py
 ```

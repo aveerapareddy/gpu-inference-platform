@@ -84,8 +84,19 @@ class LifecycleManager:
             self._emit_state_event(entry, LifecycleEventType.REQUEST_VALIDATED)
         return entry
 
-    def transition(self, request_id: UUID, to_state: RequestState) -> RegisteredRequest:
+    def transition(
+        self,
+        request_id: UUID,
+        to_state: RequestState,
+        *,
+        batch_id: UUID | None = None,
+        backend_id: str | None = None,
+    ) -> RegisteredRequest:
         entry = self._registry.get(request_id)
+        if batch_id is not None:
+            entry.batch_id = batch_id
+        if backend_id is not None:
+            entry.backend_id = backend_id
         from_state = entry.state
         if not is_allowed_transition(from_state, to_state):
             raise InvalidTransitionError(str(request_id), from_state, to_state)
@@ -117,8 +128,15 @@ class LifecycleManager:
         request_id: UUID,
         reason: FailureReason,
         message: str,
+        *,
+        batch_id: UUID | None = None,
+        backend_id: str | None = None,
     ) -> RegisteredRequest:
         entry = self._registry.get(request_id)
+        if batch_id is not None:
+            entry.batch_id = batch_id
+        if backend_id is not None:
+            entry.backend_id = backend_id
         failure = InternalFailure(message, reason=reason)
         FailureFramework.apply_to_request(entry, failure.classified)
         if entry.state != RequestState.FAILED:
@@ -128,6 +146,19 @@ class LifecycleManager:
             self._registry.update_state(request_id, RequestState.FAILED)
             self._emit_state_event(entry, LifecycleEventType.REQUEST_FAILED)
         return entry
+
+    def complete_request(self, request_id: UUID) -> RegisteredRequest:
+        """SUBMITTED -> COMPLETED. Simulated completion; no token generation."""
+        entry = self._registry.get(request_id)
+        if entry.state != RequestState.SUBMITTED:
+            raise InvalidTransitionError(str(request_id), entry.state, RequestState.COMPLETED)
+        updated = self.transition(request_id, RequestState.COMPLETED)
+        self._emit_state_event(
+            updated,
+            LifecycleEventType.REQUEST_COMPLETED,
+            extra=_trace_extra(updated),
+        )
+        return updated
 
     async def handoff_to_scheduler(self, request_id: UUID) -> RegisteredRequest:
         """No-op until scheduler exists."""
@@ -141,7 +172,16 @@ class LifecycleManager:
     def get_entry(self, request_id: UUID) -> RegisteredRequest:
         return self._registry.get(request_id)
 
-    def _emit_state_event(self, entry: RegisteredRequest, event_type: LifecycleEventType) -> None:
+    def _emit_state_event(
+        self,
+        entry: RegisteredRequest,
+        event_type: LifecycleEventType,
+        *,
+        extra: dict | None = None,
+    ) -> None:
+        trace = _trace_extra(entry)
+        if extra:
+            trace.update(extra)
         self._events.emit(
             event_type,
             entry.request_id,
@@ -150,6 +190,7 @@ class LifecycleManager:
             timestamp=datetime.now(timezone.utc).isoformat(),
             model=entry.inference_request.model,
             to_state=entry.state.value,
+            extra=trace,
         )
 
     def _emit_for_transition(
@@ -160,6 +201,7 @@ class LifecycleManager:
     ) -> None:
         correlation_id = entry.request_context.trace_id
         ts = datetime.now(timezone.utc).isoformat()
+        trace = _trace_extra(entry)
         common = {
             "correlation_id": correlation_id,
             "lifecycle_state": to_state.value,
@@ -167,6 +209,7 @@ class LifecycleManager:
             "from_state": from_state.value,
             "to_state": to_state.value,
             "model": entry.inference_request.model,
+            "extra": trace,
         }
 
         if to_state == RequestState.VALIDATED:
@@ -175,6 +218,12 @@ class LifecycleManager:
             self._events.emit(LifecycleEventType.REQUEST_ADMITTED, entry.request_id, **common)
         elif to_state == RequestState.QUEUED:
             pass
+        elif to_state == RequestState.SCHEDULED:
+            self._events.emit(LifecycleEventType.REQUEST_SCHEDULED, entry.request_id, **common)
+        elif to_state == RequestState.BATCHED:
+            self._events.emit(LifecycleEventType.REQUEST_BATCHED, entry.request_id, **common)
+        elif to_state == RequestState.SUBMITTED:
+            self._events.emit(LifecycleEventType.REQUEST_SUBMITTED, entry.request_id, **common)
         elif to_state == RequestState.REJECTED:
             self._events.emit(
                 LifecycleEventType.REQUEST_REJECTED,
@@ -191,3 +240,12 @@ class LifecycleManager:
             )
         elif to_state == RequestState.COMPLETED:
             self._events.emit(LifecycleEventType.REQUEST_COMPLETED, entry.request_id, **common)
+
+
+def _trace_extra(entry: RegisteredRequest) -> dict:
+    extra: dict = {}
+    if entry.batch_id is not None:
+        extra["batch_id"] = str(entry.batch_id)
+    if entry.backend_id is not None:
+        extra["backend_id"] = entry.backend_id
+    return extra

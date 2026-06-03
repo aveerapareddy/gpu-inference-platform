@@ -101,18 +101,21 @@ async def process_chat_completion(
         model=gateway_ctx.requested_model,
     )
     logger.info(
-        "request queued in control plane",
+        "request processed through platform",
         ctx=log_ctx,
         validation_ms=round(elapsed_ms, 3),
         lifecycle_state=gateway_ctx.lifecycle_state.value,
+        batch_id=str(accept_result.entry.batch_id) if accept_result.entry.batch_id else None,
+        backend_id=accept_result.entry.backend_id,
         message_count=len(inference_request.messages),
     )
     return gateway_ctx, elapsed_ms
 
 
 def placeholder_chat_response(ctx: GatewayRequestContext) -> dict[str, Any]:
-    """Contract-shaped response; inference not connected. Request is at QUEUED."""
+    """Contract-shaped response after mock backend completion."""
     created = int(ctx.received_timestamp.timestamp())
+    state = ctx.lifecycle_state.value
     return {
         "id": str(ctx.request_id),
         "object": "chat.completion",
@@ -124,8 +127,8 @@ def placeholder_chat_response(ctx: GatewayRequestContext) -> dict[str, Any]:
                 "message": {
                     "role": "assistant",
                     "content": (
-                        f"Request accepted and queued (lifecycle_state={ctx.lifecycle_state.value}). "
-                        "Scheduler and inference are not connected."
+                        f"Request completed via mock backend (lifecycle_state={state}). "
+                        "No model tokens generated."
                     ),
                 },
                 "finish_reason": "stop",
@@ -150,8 +153,8 @@ def placeholder_text_completion_response(ctx: GatewayRequestContext) -> dict[str
             {
                 "index": 0,
                 "text": (
-                    f"Request accepted and queued (lifecycle_state={ctx.lifecycle_state.value}). "
-                    "Scheduler and inference are not connected."
+                    f"Request completed via mock backend (lifecycle_state={ctx.lifecycle_state.value}). "
+                    "No model tokens generated."
                 ),
                 "finish_reason": "stop",
             }
