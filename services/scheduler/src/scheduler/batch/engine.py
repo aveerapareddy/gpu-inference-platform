@@ -9,6 +9,8 @@ from uuid import UUID, uuid4
 from common_schemas.batch import BatchAssignment
 from common_schemas.queue import QueueItem
 
+from gpu_inference_observability.registry.recorder import RuntimeMetricsRecorder
+
 from scheduler.batch.active_set import ActiveRequestSet
 from scheduler.batch.admission import (
     AdmissionDecision,
@@ -36,10 +38,13 @@ class ContinuousBatchEngine:
         self,
         config: BatchAdmissionConfig,
         events: BatchEventEmitter,
+        *,
+        metrics_recorder: RuntimeMetricsRecorder | None = None,
     ) -> None:
         config.validate()
         self._config = config
         self._events = events
+        self._metrics = metrics_recorder
         self._batches: dict[UUID, Batch] = {}
         self._sets: dict[UUID, ActiveRequestSet] = {}
         self._request_to_batch: dict[UUID, UUID] = {}
@@ -195,6 +200,9 @@ class ContinuousBatchEngine:
         )
 
         self._advance_batch_after_admission(batch, now)
+        if self._metrics is not None:
+            self._metrics.record_batch_admission(size=batch.active_member_count)
+            self._update_active_batches_gauge()
 
         assignment = BatchAssignment(
             request_id=item.request_id,
@@ -325,6 +333,9 @@ class ContinuousBatchEngine:
             model=model,
             decision_reason="new_batch",
         )
+        if self._metrics is not None:
+            self._metrics.record_batch_created()
+            self._update_active_batches_gauge()
         self._events.emit(
             BatchEventType.BATCH_ADMISSION,
             batch_id=batch_id,
@@ -374,6 +385,10 @@ class ContinuousBatchEngine:
             decision_reason=reason,
             extra={"previous_state": previous.value},
         )
+        if self._metrics is not None:
+            lifetime = (batch.context.completed_at - batch.context.created_at).total_seconds()
+            self._metrics.record_batch_completed(lifetime_seconds=lifetime)
+            self._update_active_batches_gauge()
 
     def _fail_batch_locked(self, batch: Batch, reason: str) -> None:
         if batch.context.state in BATCH_TERMINAL_STATES:
@@ -389,6 +404,11 @@ class ContinuousBatchEngine:
             decision_reason=reason,
             extra={"previous_state": previous.value},
         )
+        if self._metrics is not None:
+            failed_at = datetime.now(timezone.utc)
+            lifetime = (failed_at - batch.context.created_at).total_seconds()
+            self._metrics.record_batch_failed(lifetime_seconds=lifetime)
+            self._update_active_batches_gauge()
 
     def _next_slot_index(self, batch: Batch) -> int:
         used = {m.slot_index for m in batch.members if m.status == MemberStatus.ACTIVE}
@@ -399,3 +419,11 @@ class ContinuousBatchEngine:
 
     def _global_active_count_locked(self) -> int:
         return sum(s.active_count() for s in self._sets.values())
+
+    def _update_active_batches_gauge(self) -> None:
+        if self._metrics is None:
+            return
+        active = sum(
+            1 for batch in self._batches.values() if batch.state not in BATCH_TERMINAL_STATES
+        )
+        self._metrics.set_active_batches(active)

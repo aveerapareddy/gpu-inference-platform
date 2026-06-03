@@ -137,14 +137,16 @@ class LifecycleManager:
             entry.batch_id = batch_id
         if backend_id is not None:
             entry.backend_id = backend_id
+        previous_state = entry.state
         failure = InternalFailure(message, reason=reason)
+        target_state = FailureFramework.target_state(failure.classified)
+        if is_allowed_transition(previous_state, target_state):
+            updated = self.transition(request_id, target_state)
+            FailureFramework.apply_to_request(updated, failure.classified)
+            return updated
         FailureFramework.apply_to_request(entry, failure.classified)
-        if entry.state != RequestState.FAILED:
-            if is_allowed_transition(entry.state, RequestState.FAILED):
-                return self.transition(request_id, RequestState.FAILED)
-            entry.state = RequestState.FAILED
-            self._registry.update_state(request_id, RequestState.FAILED)
-            self._emit_state_event(entry, LifecycleEventType.REQUEST_FAILED)
+        self._registry.update_state(request_id, target_state)
+        self._emit_state_event(entry, LifecycleEventType.REQUEST_FAILED)
         return entry
 
     def complete_request(self, request_id: UUID) -> RegisteredRequest:

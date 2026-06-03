@@ -16,7 +16,7 @@ from api_gateway.dependencies import (
 )
 from api_gateway.errors import GatewayError, gateway_error_handler, unhandled_error_handler
 from api_gateway.middleware import RequestTimingMiddleware
-from api_gateway.routers import completions, health
+from api_gateway.routers import completions, health, metrics
 
 
 @asynccontextmanager
@@ -41,7 +41,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="GPU Inference Platform API Gateway",
         version="0.1.0",
-        description="Session 11: full embedded path through mock backend completion.",
+        description="Session 13: Prometheus /metrics export on embedded stack.",
         lifespan=lifespan,
     )
     app.state.settings = settings
@@ -53,5 +53,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(completions.router)
+    app.include_router(metrics.router)
 
     return app

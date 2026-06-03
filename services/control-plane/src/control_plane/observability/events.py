@@ -15,6 +15,7 @@ from gpu_inference_observability.runtime.models import (
     RuntimeComponent,
 )
 from gpu_inference_observability.runtime.recorder import RuntimeEventRecorder
+from gpu_inference_observability.registry.recorder import RuntimeMetricsRecorder
 
 
 class LifecycleEventType(StrEnum):
@@ -53,10 +54,12 @@ class LifecycleEventEmitter:
         service_name: str,
         *,
         trace_recorder: RuntimeEventRecorder | None = None,
+        metrics_recorder: RuntimeMetricsRecorder | None = None,
     ) -> None:
         self._logger = logger
         self._service_name = service_name
         self._recorder = trace_recorder
+        self._metrics = metrics_recorder
 
     def emit(
         self,
@@ -134,6 +137,15 @@ class LifecycleEventEmitter:
                         backend_id=backend_id,
                     )
                 )
+        if self._metrics is not None:
+            if event_type in {LifecycleEventType.REQUEST_RECEIVED, LifecycleEventType.REQUEST_CREATED}:
+                self._metrics.record_request_received(request_id)
+            elif event_type == LifecycleEventType.REQUEST_COMPLETED and from_state is not None:
+                self._metrics.record_request_completed(request_id)
+            elif event_type == LifecycleEventType.REQUEST_FAILED:
+                self._metrics.record_request_failed(request_id)
+            elif event_type == LifecycleEventType.REQUEST_REJECTED and from_state is not None:
+                self._metrics.record_request_rejected(request_id)
 
     def emit_queue(
         self,
@@ -193,3 +205,15 @@ class LifecycleEventEmitter:
                         else "timed_out",
                     )
                 )
+        if self._metrics is not None:
+            wait_ms = (extra or {}).get("queue_wait_duration_ms")
+            wait_seconds = wait_ms / 1000.0 if wait_ms is not None else None
+            if event_type == QueueEventType.REQUEST_ENQUEUED:
+                self._metrics.record_queue_enqueue(wait_seconds=wait_seconds)
+            elif event_type == QueueEventType.REQUEST_DEQUEUED:
+                self._metrics.record_queue_dequeue(wait_seconds=wait_seconds)
+            elif event_type == QueueEventType.QUEUE_TIMEOUT:
+                self._metrics.record_queue_timeout(wait_seconds=wait_seconds)
+                self._metrics.record_request_failed(request_id)
+            elif event_type == QueueEventType.QUEUE_FULL:
+                self._metrics.record_request_rejected(request_id)

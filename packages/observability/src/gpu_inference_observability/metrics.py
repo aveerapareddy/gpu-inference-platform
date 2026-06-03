@@ -1,7 +1,8 @@
 """Metric name and kind contracts.
 
-Status: Implemented (Session 3). No Prometheus client; names only.
+Status: Session 3 catalog. Runtime Prometheus instruments: gpu_inference_observability.registry.
 Full catalog: docs/contracts/observability-metrics.md
+Implemented runtime metrics: docs/architecture/metrics-model.md
 """
 
 from __future__ import annotations

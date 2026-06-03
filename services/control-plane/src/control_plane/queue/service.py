@@ -10,6 +10,7 @@ from common_schemas.states import FailureReason, RequestState
 from control_plane.failures.categories import AdmissionFailure
 from control_plane.failures.framework import FailureFramework
 from control_plane.observability.events import LifecycleEventEmitter, LifecycleEventType, QueueEventType
+from gpu_inference_observability.registry.recorder import RuntimeMetricsRecorder
 from control_plane.queue.capacity import QueueCapacityConfig
 from control_plane.queue.inspection import QueueInspection, QueueSnapshot, QueueStatistics, QueuedRequestView
 from control_plane.queue.waiting_queue import QueueFullError, QueueOperations
@@ -25,10 +26,13 @@ class QueueService:
         registry: InMemoryRequestRegistry,
         operations: QueueOperations,
         events: LifecycleEventEmitter,
+        *,
+        metrics_recorder: RuntimeMetricsRecorder | None = None,
     ) -> None:
         self._registry = registry
         self._ops = operations
         self._events = events
+        self._metrics = metrics_recorder
         self._inspection = QueueInspection(operations)
 
     @property
@@ -59,6 +63,8 @@ class QueueService:
             FailureFramework.apply_to_request(entry, failure.classified)
             entry.state = RequestState.REJECTED
             self._registry.update_state(request_id, RequestState.REJECTED)
+            if self._metrics is not None:
+                self._metrics.set_queue_depth(self._ops.size())
             return entry
 
         entry.state = RequestState.QUEUED
@@ -85,6 +91,8 @@ class QueueService:
             to_state=RequestState.QUEUED.value,
             extra={"queue_position": queued.queue_position},
         )
+        if self._metrics is not None:
+            self._metrics.set_queue_depth(self._ops.size())
         return entry
 
     def dequeue_next(self) -> RegisteredRequest | None:
@@ -93,6 +101,8 @@ class QueueService:
         if item is None:
             return None
         self._emit_dequeued(item)
+        if self._metrics is not None:
+            self._metrics.set_queue_depth(self._ops.size())
         return item.entry
 
     def remove(self, request_id: UUID) -> RegisteredRequest | None:
@@ -127,6 +137,8 @@ class QueueService:
                 extra={"queue_wait_duration_ms": item.queue_wait_duration_ms},
             )
             results.append(entry)
+        if self._metrics is not None and expired_items:
+            self._metrics.set_queue_depth(self._ops.size())
         return results
 
     def get_queue_snapshot(self, queue_name: str = "all") -> QueueSnapshot:

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from uuid import UUID
 
 from common_schemas.batch import Batch as DispatchBatch
 from gpu_inference_observability import StructuredLogger
 from gpu_inference_observability.runtime.recorder import RuntimeEventRecorder
+from gpu_inference_observability.registry.recorder import RuntimeMetricsRecorder
 
 from inference_adapter.backend.failures import (
     BackendInternalFailure,
@@ -32,6 +34,7 @@ class InferenceAdapterApplication:
     logger: StructuredLogger
     registry: BackendRegistry
     events: BackendEventEmitter
+    metrics_recorder: RuntimeMetricsRecorder | None = None
     _running: bool = False
 
     async def startup(self) -> None:
@@ -143,19 +146,39 @@ class InferenceAdapterApplication:
                 reason="submit_batch",
             )
 
+        if self.metrics_recorder is not None:
+            self.metrics_recorder.record_backend_submission(target_id)
+
         backend = entry.backend
+        started = time.monotonic()
         try:
             result = await backend.submit_batch(batch)
         except BackendRejected:
+            if self.metrics_recorder is not None:
+                self.metrics_recorder.record_backend_rejection(
+                    target_id,
+                    duration_seconds=time.monotonic() - started,
+                )
             raise
         except Exception as exc:
+            if self.metrics_recorder is not None:
+                self.metrics_recorder.record_backend_failure(
+                    target_id,
+                    duration_seconds=time.monotonic() - started,
+                )
             raise BackendInternalFailure(
                 str(exc),
                 backend_id=target_id,
                 batch_id=str(batch.batch_id),
             ) from exc
 
+        duration = time.monotonic() - started
         if result.accepted:
+            if self.metrics_recorder is not None:
+                self.metrics_recorder.record_backend_acceptance(
+                    target_id,
+                    duration_seconds=duration,
+                )
             self.events.emit(
                 BackendEventType.BATCH_ACCEPTED,
                 backend_id=target_id,
@@ -171,6 +194,11 @@ class InferenceAdapterApplication:
                     reason=result.reason,
                 )
         else:
+            if self.metrics_recorder is not None:
+                self.metrics_recorder.record_backend_rejection(
+                    target_id,
+                    duration_seconds=duration,
+                )
             self.events.emit(
                 BackendEventType.BATCH_REJECTED,
                 backend_id=target_id,
@@ -235,6 +263,7 @@ def create_application(
     settings: Settings | None = None,
     *,
     trace_recorder: RuntimeEventRecorder | None = None,
+    metrics_recorder: RuntimeMetricsRecorder | None = None,
 ) -> InferenceAdapterApplication:
     settings = settings or get_settings()
     logger = StructuredLogger(settings.service_name)
@@ -245,6 +274,7 @@ def create_application(
         logger=logger,
         registry=registry,
         events=events,
+        metrics_recorder=metrics_recorder,
     )
     if settings.register_mock_backend:
         from inference_adapter.backends.mock import MockInferenceBackend

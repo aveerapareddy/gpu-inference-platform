@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from common_schemas.states import SchedulerState as ProcessSchedulerState
 from gpu_inference_observability import StructuredLogger
 from gpu_inference_observability.runtime.recorder import RuntimeEventRecorder
+from gpu_inference_observability.registry.recorder import RuntimeMetricsRecorder
 
 from scheduler.config import Settings, get_settings
 from scheduler.batch.admission import BatchAdmissionConfig
@@ -111,6 +112,7 @@ def create_application(
     *,
     adapter_client: AdapterClient | None = None,
     trace_recorder: RuntimeEventRecorder | None = None,
+    metrics_recorder: RuntimeMetricsRecorder | None = None,
 ) -> SchedulerApplication:
     settings = settings or get_settings()
     logger = StructuredLogger(settings.service_name)
@@ -121,7 +123,7 @@ def create_application(
         max_active_requests=settings.max_active_requests,
         batch_admission_window_ms=settings.batch_admission_window_ms,
     )
-    batch_engine = ContinuousBatchEngine(batch_config, batch_events)
+    batch_engine = ContinuousBatchEngine(batch_config, batch_events, metrics_recorder=metrics_recorder)
     batch = BatchService(batch_engine)
     state = SchedulerState()
     selector = FifoSelector()
@@ -132,6 +134,7 @@ def create_application(
         settings=settings,
         state=state,
         batch=batch,
+        metrics_recorder=metrics_recorder,
     )
     loop = SchedulerLoop(
         cycle_runner=cycle_runner,

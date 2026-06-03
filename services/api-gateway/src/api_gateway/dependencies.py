@@ -14,6 +14,7 @@ from api_gateway.control_plane.stub import StubControlPlaneClient
 from api_gateway.runtime.integrated_client import IntegratedPlatformClient
 from api_gateway.runtime.stack import PlatformStack, create_platform_stack
 from control_plane.application import ControlPlaneApplication, create_application
+from gpu_inference_observability.registry.registry import MetricsRegistry
 
 _stack: PlatformStack | None = None
 _cp_app: ControlPlaneApplication | None = None
@@ -70,6 +71,14 @@ def get_control_plane_client() -> ControlPlaneClient:
     if settings.control_plane_integrated:
         return IntegratedControlPlaneClient(_get_control_plane_application())
     return StubControlPlaneClient()
+
+
+def get_metrics_registry() -> MetricsRegistry | None:
+    settings = get_settings()
+    if not settings.full_path_integrated:
+        return None
+    stack = _get_platform_stack()
+    return stack.metrics_registry
 
 
 def get_app_settings() -> Settings:

@@ -8,6 +8,8 @@ from uuid import uuid4
 
 from common_schemas.states import SchedulerState as ProcessSchedulerState
 
+from gpu_inference_observability.registry.recorder import RuntimeMetricsRecorder
+
 from scheduler.config import Settings
 from scheduler.batch.service import BatchService
 from scheduler.models.batch_decision import BatchPlacementDecision, BatchRejectionDecision
@@ -29,6 +31,8 @@ class SchedulingCycleRunner:
         settings: Settings,
         state: SchedulerState,
         batch: BatchService,
+        *,
+        metrics_recorder: RuntimeMetricsRecorder | None = None,
     ) -> None:
         self._queue = queue_reader
         self._selector = selector
@@ -36,6 +40,7 @@ class SchedulingCycleRunner:
         self._settings = settings
         self._state = state
         self._batch = batch
+        self._metrics = metrics_recorder
         self._lock = threading.Lock()
 
     def run_cycle(self) -> SchedulingResult:
@@ -147,6 +152,14 @@ class SchedulingCycleRunner:
 
             self._state.last_completed_cycle = cycle
             self._state.total_cycles += 1
+            if self._metrics is not None:
+                duration = (end - start).total_seconds()
+                self._metrics.record_scheduler_cycle(
+                    selected_count=len(selected),
+                    skipped_count=len(skipped),
+                    duration_seconds=duration,
+                    failed=False,
+                )
             return result
 
         except Exception as exc:
@@ -167,6 +180,14 @@ class SchedulingCycleRunner:
             )
 
             end = cycle.cycle_end_time or datetime.now(timezone.utc)
+            if self._metrics is not None:
+                duration = (end - start).total_seconds()
+                self._metrics.record_scheduler_cycle(
+                    selected_count=0,
+                    skipped_count=0,
+                    duration_seconds=duration,
+                    failed=True,
+                )
             return SchedulingResult(
                 cycle_id=cycle_id,
                 cycle_start_time=start,

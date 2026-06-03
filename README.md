@@ -1,6 +1,6 @@
 # GPU Inference Platform
 
-Status: Foundation through Session 12 — runtime observability (in-memory traces)
+Status: Foundation through Session 13 — Prometheus metrics export
 
 ## Engineering thesis
 
@@ -90,6 +90,7 @@ Read order: `docs/overview/project-constitution.md` →
 | Shared schema package (Session 3) | Complete |
 | Observability package (Session 3) | Complete (scaffolding) |
 | Runtime observability (Session 12) | Complete — trace store, events, timing, metrics models, snapshots (in-memory) |
+| Runtime metrics export (Session 13) | Complete — centralized registry, Prometheus `/metrics` on gateway |
 | Service scaffolds (Session 3) | Complete |
 | API gateway runtime | Session 12 — trace recording on integrated path |
 | Control plane runtime | Session 12 — lifecycle/queue events recorded to trace store |
@@ -98,7 +99,7 @@ Read order: `docs/overview/project-constitution.md` →
 | Metrics collector runtime | Not started |
 | Operator console | Not started |
 | Infra (db, docker, k8s) | Not started |
-| Observability stack (prometheus, grafana) | Not started |
+| Observability stack (prometheus, grafana) | Session 13 — Prometheus export only; Grafana not started |
 | Benchmarks | Not started |
 
 This table is the source of truth for what exists. It is updated in the same
