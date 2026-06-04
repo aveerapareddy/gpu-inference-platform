@@ -10,6 +10,9 @@ from common_schemas.states import SchedulerState as ProcessSchedulerState
 
 from gpu_inference_observability.registry.recorder import RuntimeMetricsRecorder
 
+from gpu_inference_observability.failure_injection.config import FailurePoint
+from gpu_inference_observability.failure_injection.injector import FailureInjector
+
 from scheduler.config import Settings
 from scheduler.batch.service import BatchService
 from scheduler.models.batch_decision import BatchPlacementDecision, BatchRejectionDecision
@@ -33,6 +36,7 @@ class SchedulingCycleRunner:
         batch: BatchService,
         *,
         metrics_recorder: RuntimeMetricsRecorder | None = None,
+        failure_injector: FailureInjector | None = None,
     ) -> None:
         self._queue = queue_reader
         self._selector = selector
@@ -41,6 +45,7 @@ class SchedulingCycleRunner:
         self._state = state
         self._batch = batch
         self._metrics = metrics_recorder
+        self._failure_injector = failure_injector
         self._lock = threading.Lock()
 
     def run_cycle(self) -> SchedulingResult:
@@ -61,6 +66,10 @@ class SchedulingCycleRunner:
         )
 
         try:
+            if self._failure_injector is not None:
+                self._failure_injector.maybe_raise(FailurePoint.SCHEDULER_CRASH)
+                self._failure_injector.maybe_raise(FailurePoint.SCHEDULER_TIMEOUT)
+
             items = self._queue.list_queue_items(limit=self._settings.queue_scan_limit)
             item_by_id = {item.request_id: item for item in items}
             candidates = items_to_candidates(items)
@@ -176,7 +185,7 @@ class SchedulingCycleRunner:
                 SchedulerEventType.SCHEDULER_FAILURE,
                 scheduler_cycle_id=cycle_id,
                 decision_reason=failure.reason,
-                extra={"message": failure.message},
+                extra={"failure_message": failure.message},
             )
 
             end = cycle.cycle_end_time or datetime.now(timezone.utc)

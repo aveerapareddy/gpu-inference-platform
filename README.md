@@ -1,6 +1,6 @@
 # GPU Inference Platform
 
-Status: Foundation through Session 14 — OpenTelemetry distributed tracing
+Status: Foundation through Session 15 — controlled failure validation
 
 ## Engineering thesis
 
@@ -92,6 +92,7 @@ Read order: `docs/overview/project-constitution.md` →
 | Runtime observability (Session 12) | Complete — trace store, events, timing, metrics models, snapshots (in-memory) |
 | Runtime metrics export (Session 13) | Complete — centralized registry, Prometheus `/metrics` on gateway |
 | OpenTelemetry tracing (Session 14) | Complete — span hierarchy, propagation, pluggable exporters |
+| Failure injection and validation (Session 15) | Complete — deterministic injection, runtime-validation harness |
 | Service scaffolds (Session 3) | Complete |
 | API gateway runtime | Session 14 — integrated path with OpenTelemetry root span |
 | Control plane runtime | Session 12 — lifecycle/queue events recorded to trace store |

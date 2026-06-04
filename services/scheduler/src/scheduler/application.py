@@ -10,6 +10,7 @@ from gpu_inference_observability import StructuredLogger
 from gpu_inference_observability.runtime.recorder import RuntimeEventRecorder
 from gpu_inference_observability.registry.recorder import RuntimeMetricsRecorder
 from gpu_inference_observability.otel.manager import TraceManager
+from gpu_inference_observability.failure_injection.injector import FailureInjector
 
 from scheduler.config import Settings, get_settings
 from scheduler.batch.admission import BatchAdmissionConfig
@@ -115,6 +116,7 @@ def create_application(
     trace_recorder: RuntimeEventRecorder | None = None,
     metrics_recorder: RuntimeMetricsRecorder | None = None,
     trace_manager: TraceManager | None = None,
+    failure_injector: FailureInjector | None = None,
 ) -> SchedulerApplication:
     settings = settings or get_settings()
     logger = StructuredLogger(settings.service_name)
@@ -130,6 +132,7 @@ def create_application(
         batch_events,
         metrics_recorder=metrics_recorder,
         trace_manager=trace_manager,
+        failure_injector=failure_injector,
     )
     batch = BatchService(batch_engine)
     state = SchedulerState()
@@ -142,6 +145,7 @@ def create_application(
         state=state,
         batch=batch,
         metrics_recorder=metrics_recorder,
+        failure_injector=failure_injector,
     )
     loop = SchedulerLoop(
         cycle_runner=cycle_runner,

@@ -10,6 +10,8 @@ from common_schemas.batch import BatchAssignment
 from common_schemas.queue import QueueItem
 
 from gpu_inference_observability.registry.recorder import RuntimeMetricsRecorder
+from gpu_inference_observability.failure_injection.config import FailurePoint
+from gpu_inference_observability.failure_injection.injector import FailureInjector
 from gpu_inference_observability.otel.helpers import optional_span
 from gpu_inference_observability.otel.manager import TraceManager
 from gpu_inference_observability.otel.spans import ComponentName, SpanName
@@ -44,12 +46,14 @@ class ContinuousBatchEngine:
         *,
         metrics_recorder: RuntimeMetricsRecorder | None = None,
         trace_manager: TraceManager | None = None,
+        failure_injector: FailureInjector | None = None,
     ) -> None:
         config.validate()
         self._config = config
         self._events = events
         self._metrics = metrics_recorder
         self._trace = trace_manager
+        self._failure_injector = failure_injector
         self._batches: dict[UUID, Batch] = {}
         self._sets: dict[UUID, ActiveRequestSet] = {}
         self._request_to_batch: dict[UUID, UUID] = {}
@@ -130,6 +134,16 @@ class ContinuousBatchEngine:
         model = item.inference_request.model
         now = datetime.now(timezone.utc)
 
+        if self._failure_injector is not None and self._failure_injector.should_inject(
+            FailurePoint.BATCH_ADMISSION_FAILURE,
+            request_id=item.request_id,
+        ):
+            return BatchRejectionDecision(
+                request_id=item.request_id,
+                decision_reason="injected_batch_admission_failure",
+                correlation_id=correlation_id,
+            )
+
         if item.request_id in self._request_to_batch:
             return BatchRejectionDecision(
                 request_id=item.request_id,
@@ -180,6 +194,11 @@ class ContinuousBatchEngine:
             )
 
         if batch is None:
+            if self._failure_injector is not None:
+                self._failure_injector.maybe_raise(
+                    FailurePoint.BATCH_CREATION_FAILURE,
+                    request_id=item.request_id,
+                )
             batch = self._create_batch(model, now)
 
         with optional_span(
@@ -226,6 +245,16 @@ class ContinuousBatchEngine:
             inference_request=item.inference_request,
         )
         self._assignments[item.request_id] = assignment
+        if self._failure_injector is not None and self._failure_injector.should_inject(
+            FailurePoint.SCHEDULER_INVALID_BATCH_ASSIGNMENT,
+            request_id=item.request_id,
+        ):
+            return BatchRejectionDecision(
+                request_id=item.request_id,
+                decision_reason="invalid_batch_assignment",
+                correlation_id=correlation_id,
+                batch_id=batch.batch_id,
+            )
         return BatchPlacementDecision(
             request_id=item.request_id,
             batch_id=batch.batch_id,
