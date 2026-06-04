@@ -1,6 +1,7 @@
 """Trace context scaffolding.
 
-Status: Implemented (Session 3). No OpenTelemetry SDK.
+Status: Implemented (Session 3). Header contract only; no OpenTelemetry SDK.
+Runtime spans: gpu_inference_observability.otel (Session 14).
 """
 
 from __future__ import annotations

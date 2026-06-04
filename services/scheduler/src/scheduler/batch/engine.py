@@ -10,6 +10,9 @@ from common_schemas.batch import BatchAssignment
 from common_schemas.queue import QueueItem
 
 from gpu_inference_observability.registry.recorder import RuntimeMetricsRecorder
+from gpu_inference_observability.otel.helpers import optional_span
+from gpu_inference_observability.otel.manager import TraceManager
+from gpu_inference_observability.otel.spans import ComponentName, SpanName
 
 from scheduler.batch.active_set import ActiveRequestSet
 from scheduler.batch.admission import (
@@ -40,11 +43,13 @@ class ContinuousBatchEngine:
         events: BatchEventEmitter,
         *,
         metrics_recorder: RuntimeMetricsRecorder | None = None,
+        trace_manager: TraceManager | None = None,
     ) -> None:
         config.validate()
         self._config = config
         self._events = events
         self._metrics = metrics_recorder
+        self._trace = trace_manager
         self._batches: dict[UUID, Batch] = {}
         self._sets: dict[UUID, ActiveRequestSet] = {}
         self._request_to_batch: dict[UUID, UUID] = {}
@@ -177,32 +182,43 @@ class ContinuousBatchEngine:
         if batch is None:
             batch = self._create_batch(model, now)
 
-        member = BatchMember(
+        with optional_span(
+            self._trace,
+            SpanName.BATCH,
+            component=ComponentName.SCHEDULER,
             request_id=item.request_id,
-            slot_index=self._next_slot_index(batch),
-            model=model,
             correlation_id=correlation_id,
-            added_at=now,
-        )
-        request_set = self._sets[batch.batch_id]
-        request_set.add_request(member)
-        batch.members = request_set.all_members()
-        self._request_to_batch[item.request_id] = batch.batch_id
-
-        self._events.emit(
-            BatchEventType.REQUEST_ADDED_TO_BATCH,
             batch_id=batch.batch_id,
-            request_id=item.request_id,
-            correlation_id=correlation_id,
             model=model,
-            decision_reason=admission.reason,
-            extra={"slot_index": member.slot_index},
-        )
+            batch_state=batch.context.state.value,
+        ) as batch_scope:
+            member = BatchMember(
+                request_id=item.request_id,
+                slot_index=self._next_slot_index(batch),
+                model=model,
+                correlation_id=correlation_id,
+                added_at=now,
+            )
+            request_set = self._sets[batch.batch_id]
+            request_set.add_request(member)
+            batch.members = request_set.all_members()
+            self._request_to_batch[item.request_id] = batch.batch_id
 
-        self._advance_batch_after_admission(batch, now)
-        if self._metrics is not None:
-            self._metrics.record_batch_admission(size=batch.active_member_count)
-            self._update_active_batches_gauge()
+            self._events.emit(
+                BatchEventType.REQUEST_ADDED_TO_BATCH,
+                batch_id=batch.batch_id,
+                request_id=item.request_id,
+                correlation_id=correlation_id,
+                model=model,
+                decision_reason=admission.reason,
+                extra={"slot_index": member.slot_index},
+            )
+
+            self._advance_batch_after_admission(batch, now)
+            if self._metrics is not None:
+                self._metrics.record_batch_admission(size=batch.active_member_count)
+                self._update_active_batches_gauge()
+            batch_scope.set_request_context(batch_state=batch.context.state.value)
 
         assignment = BatchAssignment(
             request_id=item.request_id,

@@ -16,6 +16,9 @@ from control_plane.queue.inspection import QueueInspection, QueueSnapshot, Queue
 from control_plane.queue.waiting_queue import QueueFullError, QueueOperations
 from control_plane.registry.memory import InMemoryRequestRegistry
 from control_plane.registry.models import RegisteredRequest
+from gpu_inference_observability.otel.helpers import optional_span
+from gpu_inference_observability.otel.manager import TraceManager
+from gpu_inference_observability.otel.spans import ComponentName, SpanName
 
 
 class QueueService:
@@ -28,11 +31,13 @@ class QueueService:
         events: LifecycleEventEmitter,
         *,
         metrics_recorder: RuntimeMetricsRecorder | None = None,
+        trace_manager: TraceManager | None = None,
     ) -> None:
         self._registry = registry
         self._ops = operations
         self._events = events
         self._metrics = metrics_recorder
+        self._trace = trace_manager
         self._inspection = QueueInspection(operations)
 
     @property
@@ -48,52 +53,63 @@ class QueueService:
         if entry.state != RequestState.ADMITTED:
             raise ValueError(f"request {request_id} must be ADMITTED before enqueue, got {entry.state}")
 
-        try:
-            queued = self._ops.enqueue(entry)
-        except QueueFullError as exc:
+        with optional_span(
+            self._trace,
+            SpanName.QUEUE,
+            component=ComponentName.CONTROL_PLANE,
+            request_id=request_id,
+            correlation_id=entry.request_context.trace_id,
+            model=entry.inference_request.model,
+            request_state=RequestState.ADMITTED.value,
+        ) as queue_scope:
+            try:
+                queued = self._ops.enqueue(entry)
+            except QueueFullError as exc:
+                queue_scope.record_rejection(exc.reason, failure_type="queue_full")
+                self._events.emit_queue(
+                    QueueEventType.QUEUE_FULL,
+                    entry.request_id,
+                    correlation_id=entry.request_context.trace_id,
+                    model=entry.inference_request.model,
+                    queue_position=None,
+                    extra={"reason": exc.reason, "queue_depth": self._ops.size()},
+                )
+                failure = AdmissionFailure(exc.reason, reason=FailureReason.QUEUE_FULL, retryable=True)
+                FailureFramework.apply_to_request(entry, failure.classified)
+                entry.state = RequestState.REJECTED
+                self._registry.update_state(request_id, RequestState.REJECTED)
+                if self._metrics is not None:
+                    self._metrics.set_queue_depth(self._ops.size())
+                return entry
+
+            entry.state = RequestState.QUEUED
+            self._registry.update_state(request_id, RequestState.QUEUED)
             self._events.emit_queue(
-                QueueEventType.QUEUE_FULL,
+                QueueEventType.REQUEST_ENQUEUED,
                 entry.request_id,
                 correlation_id=entry.request_context.trace_id,
                 model=entry.inference_request.model,
-                queue_position=None,
-                extra={"reason": exc.reason, "queue_depth": self._ops.size()},
+                queue_position=queued.queue_position,
+                extra={
+                    "queue_wait_duration_ms": 0.0,
+                    "request_age_ms": queued.request_age_ms,
+                    "queue_name": queued.queue_name,
+                },
             )
-            failure = AdmissionFailure(exc.reason, reason=FailureReason.QUEUE_FULL, retryable=True)
-            FailureFramework.apply_to_request(entry, failure.classified)
-            entry.state = RequestState.REJECTED
-            self._registry.update_state(request_id, RequestState.REJECTED)
+            self._events.emit(
+                LifecycleEventType.REQUEST_QUEUED,
+                entry.request_id,
+                correlation_id=entry.request_context.trace_id,
+                lifecycle_state=RequestState.QUEUED.value,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                model=entry.inference_request.model,
+                to_state=RequestState.QUEUED.value,
+                extra={"queue_position": queued.queue_position},
+            )
+            queue_scope.set_request_context(request_state=RequestState.QUEUED.value)
             if self._metrics is not None:
                 self._metrics.set_queue_depth(self._ops.size())
             return entry
-
-        entry.state = RequestState.QUEUED
-        self._registry.update_state(request_id, RequestState.QUEUED)
-        self._events.emit_queue(
-            QueueEventType.REQUEST_ENQUEUED,
-            entry.request_id,
-            correlation_id=entry.request_context.trace_id,
-            model=entry.inference_request.model,
-            queue_position=queued.queue_position,
-            extra={
-                "queue_wait_duration_ms": 0.0,
-                "request_age_ms": queued.request_age_ms,
-                "queue_name": queued.queue_name,
-            },
-        )
-        self._events.emit(
-            LifecycleEventType.REQUEST_QUEUED,
-            entry.request_id,
-            correlation_id=entry.request_context.trace_id,
-            lifecycle_state=RequestState.QUEUED.value,
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            model=entry.inference_request.model,
-            to_state=RequestState.QUEUED.value,
-            extra={"queue_position": queued.queue_position},
-        )
-        if self._metrics is not None:
-            self._metrics.set_queue_depth(self._ops.size())
-        return entry
 
     def dequeue_next(self) -> RegisteredRequest | None:
         """Remove head of queue. For future scheduler; updates no lifecycle state here."""

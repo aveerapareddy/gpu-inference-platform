@@ -1,39 +1,49 @@
 # Observability Package
 
-**Status:** Session 12 tracing + Session 13 Prometheus metrics implemented.
+**Status:** Session 12 tracing + Session 13 metrics + Session 14 OpenTelemetry spans.
 
 ## Modules
 
 | Module | Status | Purpose |
 | --- | --- | --- |
 | `logging.py` | Session 3 | Structured JSON logs |
-| `tracing.py` | Session 3 | Span name contracts |
-| `metrics.py` | Session 3 | Metric name/kind contracts (catalog) |
-| `runtime/` | Session 12 | In-memory request traces |
-| `registry/` | Session 13 | Prometheus metrics registry and recorder |
+| `tracing.py` | Session 3 | Span name contracts (pre-OTel) |
+| `metrics.py` | Session 3 | Metric name/kind contracts |
+| `runtime/` | Session 12 | In-memory request event traces |
+| `registry/` | Session 13 | Prometheus metrics registry |
+| `otel/` | Session 14 | OpenTelemetry trace manager and exporters |
+
+## OpenTelemetry
+
+```python
+from gpu_inference_observability.otel import TraceManager, TraceExportConfig, TraceExporterType
+
+manager = TraceManager(TraceExportConfig(exporter=TraceExporterType.CONSOLE))
+with manager.span("request", component="gateway", request_id=rid, correlation_id=cid):
+    ...
+manager.force_flush()
+```
+
+Embedded stack: `create_platform_stack()` wires one shared `TraceManager` (memory exporter by default).
 
 ## Prometheus export
 
-Embedded stack exposes metrics via gateway `GET /metrics` when `GATEWAY_FULL_PATH_INTEGRATED=true`.
-
-```bash
-curl -s localhost:8000/metrics
-```
-
-Registry: `gpu_inference_observability.registry.MetricsRegistry`
+Gateway `GET /metrics` when embedded stack is enabled.
 
 ## Documentation
 
-- Tracing: [docs/architecture/observability-runtime.md](../../docs/architecture/observability-runtime.md)
+- Event traces: [docs/architecture/observability-runtime.md](../../docs/architecture/observability-runtime.md)
 - Metrics: [docs/architecture/metrics-model.md](../../docs/architecture/metrics-model.md)
+- OTel spans: [docs/architecture/tracing-model.md](../../docs/architecture/tracing-model.md)
 
 ## Validation
 
 ```bash
 python tests/integration/session12_trace_validation.py
 python tests/integration/session13_metrics_validation.py
+python tests/integration/session14_otel_validation.py
 ```
 
 ## Not implemented
 
-Grafana dashboards, alerts, OpenTelemetry export, GPU metrics, persistent metric storage.
+Jaeger, Tempo, Grafana, alerting, collector deployment, cross-process W3C propagation.

@@ -10,6 +10,8 @@ from common_schemas.states import FailureReason, RequestState, is_terminal_reque
 from api_gateway.runtime.stack import PlatformStack
 from control_plane.errors import InvalidTransitionError
 from control_plane.registry.models import RegisteredRequest
+from gpu_inference_observability.otel.helpers import optional_span
+from gpu_inference_observability.otel.spans import ComponentName, SpanName
 from scheduler.models.batch_decision import BatchPlacementDecision, BatchRejectionDecision
 
 
@@ -31,15 +33,52 @@ class RequestPathOrchestrator:
         if entry.state != RequestState.QUEUED:
             return entry
 
-        result = await self._stack.scheduler.run_scheduling_cycle()
-        return self._finalize_request(request_id, result)
+        trace = self._stack.trace_manager
+        with optional_span(
+            trace,
+            SpanName.SCHEDULER,
+            component=ComponentName.SCHEDULER,
+            request_id=request_id,
+            correlation_id=submit.request_context.trace_id,
+            model=submit.inference_request.model,
+            request_state=RequestState.QUEUED.value,
+        ) as scheduler_scope:
+            try:
+                result = await self._stack.scheduler.run_scheduling_cycle()
+            except Exception as exc:
+                scheduler_scope.record_failure("scheduler_cycle_error", str(exc))
+                raise
+            finalized = self._finalize_request(request_id, result, submit)
+            if finalized.state == RequestState.FAILED:
+                scheduler_scope.record_failure(
+                    finalized.failure_reason.value if finalized.failure_reason else "failed",
+                    finalized.failure_message or "request_failed",
+                )
+            return finalized
 
-    def _finalize_request(self, request_id: UUID, result) -> RegisteredRequest:
+    def _finalize_request(
+        self,
+        request_id: UUID,
+        result,
+        submit: SubmitRequest,
+    ) -> RegisteredRequest:
         lifecycle = self.lifecycle
         batch_service = self._stack.scheduler.batch
+        trace = self._stack.trace_manager
+        correlation_id = submit.request_context.trace_id
 
         batch_rejection = _find_batch_rejection(result.rejection_decisions, request_id)
         if batch_rejection is not None:
+            with optional_span(
+                trace,
+                SpanName.BATCH,
+                component=ComponentName.SCHEDULER,
+                request_id=request_id,
+                correlation_id=correlation_id,
+                batch_id=batch_rejection.batch_id,
+                request_state=RequestState.QUEUED.value,
+            ) as batch_scope:
+                batch_scope.record_rejection(batch_rejection.decision_reason, failure_type="batch_rejected")
             return lifecycle.mark_failed(
                 request_id,
                 FailureReason.ADAPTER_ERROR,
@@ -50,6 +89,15 @@ class RequestPathOrchestrator:
         if placement is None:
             if request_id in result.skipped_request_ids:
                 return lifecycle.get_entry(request_id)
+            with optional_span(
+                trace,
+                SpanName.SCHEDULER,
+                component=ComponentName.SCHEDULER,
+                request_id=request_id,
+                correlation_id=correlation_id,
+                request_state=RequestState.QUEUED.value,
+            ) as scheduler_scope:
+                scheduler_scope.record_failure("scheduler_skip", "scheduler_did_not_select_request")
             return lifecycle.mark_failed(
                 request_id,
                 FailureReason.INTERNAL_ERROR,
@@ -66,6 +114,16 @@ class RequestPathOrchestrator:
         dispatch = _find_dispatch(result.dispatch_results, placement.batch_id)
         if dispatch is None or not dispatch.accepted:
             reason = dispatch.reason if dispatch else "batch_not_dispatched"
+            with optional_span(
+                trace,
+                SpanName.BACKEND_SUBMISSION,
+                component=ComponentName.ADAPTER,
+                request_id=request_id,
+                correlation_id=correlation_id,
+                batch_id=placement.batch_id,
+                request_state=RequestState.BATCHED.value,
+            ) as backend_scope:
+                backend_scope.record_rejection(reason, failure_type="backend_rejected")
             return lifecycle.mark_failed(
                 request_id,
                 FailureReason.ADAPTER_ERROR,

@@ -10,6 +10,9 @@ from common_schemas.batch import Batch as DispatchBatch
 from gpu_inference_observability import StructuredLogger
 from gpu_inference_observability.runtime.recorder import RuntimeEventRecorder
 from gpu_inference_observability.registry.recorder import RuntimeMetricsRecorder
+from gpu_inference_observability.otel.helpers import optional_span
+from gpu_inference_observability.otel.manager import TraceManager
+from gpu_inference_observability.otel.spans import ComponentName, SpanName
 
 from inference_adapter.backend.failures import (
     BackendInternalFailure,
@@ -35,6 +38,7 @@ class InferenceAdapterApplication:
     registry: BackendRegistry
     events: BackendEventEmitter
     metrics_recorder: RuntimeMetricsRecorder | None = None
+    trace_manager: TraceManager | None = None
     _running: bool = False
 
     async def startup(self) -> None:
@@ -151,68 +155,87 @@ class InferenceAdapterApplication:
 
         backend = entry.backend
         started = time.monotonic()
-        try:
-            result = await backend.submit_batch(batch)
-        except BackendRejected:
-            if self.metrics_recorder is not None:
-                self.metrics_recorder.record_backend_rejection(
-                    target_id,
-                    duration_seconds=time.monotonic() - started,
-                )
-            raise
-        except Exception as exc:
-            if self.metrics_recorder is not None:
-                self.metrics_recorder.record_backend_failure(
-                    target_id,
-                    duration_seconds=time.monotonic() - started,
-                )
-            raise BackendInternalFailure(
-                str(exc),
-                backend_id=target_id,
-                batch_id=str(batch.batch_id),
-            ) from exc
-
-        duration = time.monotonic() - started
-        if result.accepted:
-            if self.metrics_recorder is not None:
-                self.metrics_recorder.record_backend_acceptance(
-                    target_id,
-                    duration_seconds=duration,
-                )
-            self.events.emit(
-                BackendEventType.BATCH_ACCEPTED,
-                backend_id=target_id,
-                batch_id=batch.batch_id,
-                reason=result.reason,
-            )
+        with optional_span(
+            self.trace_manager,
+            SpanName.BACKEND_SUBMISSION,
+            component=ComponentName.ADAPTER,
+            batch_id=batch.batch_id,
+            backend_id=target_id,
+            model=batch.model,
+        ) as backend_scope:
             for assignment in batch.assignments:
-                self._emit_request_backend_event(
+                backend_scope.set_request_context(
+                    request_id=assignment.request_id,
+                    correlation_id=self._correlation_for(assignment.request_id),
+                    batch_id=batch.batch_id,
+                    backend_id=target_id,
+                )
+            try:
+                result = await backend.submit_batch(batch)
+            except BackendRejected:
+                if self.metrics_recorder is not None:
+                    self.metrics_recorder.record_backend_rejection(
+                        target_id,
+                        duration_seconds=time.monotonic() - started,
+                    )
+                backend_scope.record_rejection("backend_rejected")
+                raise
+            except Exception as exc:
+                if self.metrics_recorder is not None:
+                    self.metrics_recorder.record_backend_failure(
+                        target_id,
+                        duration_seconds=time.monotonic() - started,
+                    )
+                backend_scope.record_exception(exc)
+                raise BackendInternalFailure(
+                    str(exc),
+                    backend_id=target_id,
+                    batch_id=str(batch.batch_id),
+                ) from exc
+
+            duration = time.monotonic() - started
+            if result.accepted:
+                if self.metrics_recorder is not None:
+                    self.metrics_recorder.record_backend_acceptance(
+                        target_id,
+                        duration_seconds=duration,
+                    )
+                backend_scope.set_attribute("accepted", True)
+                self.events.emit(
                     BackendEventType.BATCH_ACCEPTED,
                     backend_id=target_id,
                     batch_id=batch.batch_id,
-                    request_id=assignment.request_id,
                     reason=result.reason,
                 )
-        else:
-            if self.metrics_recorder is not None:
-                self.metrics_recorder.record_backend_rejection(
-                    target_id,
-                    duration_seconds=duration,
-                )
-            self.events.emit(
-                BackendEventType.BATCH_REJECTED,
-                backend_id=target_id,
-                batch_id=batch.batch_id,
-                reason=result.reason,
-            )
-            for assignment in batch.assignments:
-                self._emit_request_backend_event(
+                for assignment in batch.assignments:
+                    self._emit_request_backend_event(
+                        BackendEventType.BATCH_ACCEPTED,
+                        backend_id=target_id,
+                        batch_id=batch.batch_id,
+                        request_id=assignment.request_id,
+                        reason=result.reason,
+                    )
+            else:
+                if self.metrics_recorder is not None:
+                    self.metrics_recorder.record_backend_rejection(
+                        target_id,
+                        duration_seconds=duration,
+                    )
+                backend_scope.record_rejection(result.reason or "batch_rejected")
+                self.events.emit(
                     BackendEventType.BATCH_REJECTED,
                     backend_id=target_id,
                     batch_id=batch.batch_id,
-                    request_id=assignment.request_id,
                     reason=result.reason,
                 )
+                for assignment in batch.assignments:
+                    self._emit_request_backend_event(
+                        BackendEventType.BATCH_REJECTED,
+                        backend_id=target_id,
+                        batch_id=batch.batch_id,
+                        request_id=assignment.request_id,
+                        reason=result.reason,
+                    )
         return result
 
     def _emit_request_backend_event(
@@ -224,11 +247,7 @@ class InferenceAdapterApplication:
         request_id: UUID,
         reason: str | None = None,
     ) -> None:
-        correlation_id: str | None = None
-        if self.events._recorder is not None:
-            existing = self.events._recorder.store.get(request_id)
-            if existing is not None:
-                correlation_id = existing.context.correlation_id
+        correlation_id = self._correlation_for(request_id)
         self.events.emit(
             event_type,
             backend_id=backend_id,
@@ -237,6 +256,13 @@ class InferenceAdapterApplication:
             correlation_id=correlation_id,
             reason=reason,
         )
+
+    def _correlation_for(self, request_id: UUID) -> str | None:
+        if self.events._recorder is not None:
+            existing = self.events._recorder.store.get(request_id)
+            if existing is not None:
+                return existing.context.correlation_id
+        return None
 
     async def get_request_status(
         self,
@@ -264,6 +290,7 @@ def create_application(
     *,
     trace_recorder: RuntimeEventRecorder | None = None,
     metrics_recorder: RuntimeMetricsRecorder | None = None,
+    trace_manager: TraceManager | None = None,
 ) -> InferenceAdapterApplication:
     settings = settings or get_settings()
     logger = StructuredLogger(settings.service_name)
@@ -275,6 +302,7 @@ def create_application(
         registry=registry,
         events=events,
         metrics_recorder=metrics_recorder,
+        trace_manager=trace_manager,
     )
     if settings.register_mock_backend:
         from inference_adapter.backends.mock import MockInferenceBackend

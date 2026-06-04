@@ -15,6 +15,8 @@ from api_gateway.runtime.stack import PlatformStack
 from control_plane.errors import InvalidTransitionError
 from control_plane.failures.categories import PlatformFailure
 from control_plane.registry.queries import RequestDetailsView, RequestStatusView
+from gpu_inference_observability.otel.helpers import optional_span
+from gpu_inference_observability.otel.spans import ComponentName, SpanName
 
 
 class IntegratedPlatformClient:
@@ -40,24 +42,35 @@ class IntegratedPlatformClient:
 
     async def accept_request(self, submit: SubmitRequest) -> AcceptRequestResult:
         try:
-            if self._stack.trace_recorder is not None:
-                self._stack.trace_recorder.record_gateway_receive(
-                    request_id=submit.inference_request.request_id,
-                    correlation_id=submit.request_context.trace_id,
-                    extra={"model": submit.inference_request.model},
-                )
-            entry = await self._orchestrator.execute_full_path(submit)
-            if entry.state == RequestState.REJECTED:
-                _raise_admission_error(entry)
-            if entry.state == RequestState.FAILED:
-                _raise_execution_error(entry)
-            if entry.state != RequestState.COMPLETED:
-                raise GatewayError(
-                    error_type=FailureReason.INTERNAL_ERROR,
-                    message=f"unexpected terminal state: {entry.state.value}",
-                    status_code=500,
-                )
-            return AcceptRequestResult(entry)
+            request_id = submit.inference_request.request_id
+            correlation_id = submit.request_context.trace_id
+            with optional_span(
+                self._stack.trace_manager,
+                SpanName.REQUEST,
+                component=ComponentName.GATEWAY,
+                request_id=request_id,
+                correlation_id=correlation_id,
+                model=submit.inference_request.model,
+            ) as _request_scope:
+                if self._stack.trace_recorder is not None:
+                    self._stack.trace_recorder.record_gateway_receive(
+                        request_id=request_id,
+                        correlation_id=correlation_id,
+                        extra={"model": submit.inference_request.model},
+                    )
+                entry = await self._orchestrator.execute_full_path(submit)
+                _request_scope.set_request_context(request_state=entry.state.value)
+                if entry.state == RequestState.REJECTED:
+                    _raise_admission_error(entry)
+                if entry.state == RequestState.FAILED:
+                    _raise_execution_error(entry)
+                if entry.state != RequestState.COMPLETED:
+                    raise GatewayError(
+                        error_type=FailureReason.INTERNAL_ERROR,
+                        message=f"unexpected terminal state: {entry.state.value}",
+                        status_code=500,
+                    )
+                return AcceptRequestResult(entry)
         except GatewayError:
             raise
         except InvalidTransitionError as exc:

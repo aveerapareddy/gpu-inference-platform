@@ -19,6 +19,9 @@ from control_plane.queue.service import QueueService
 from control_plane.registry.memory import InMemoryRequestRegistry
 from control_plane.registry.models import RegisteredRequest
 from control_plane.scheduler.client import SchedulerClient
+from gpu_inference_observability.otel.helpers import optional_span
+from gpu_inference_observability.otel.manager import TraceManager
+from gpu_inference_observability.otel.spans import ComponentName, SpanName
 
 
 class LifecycleManager:
@@ -31,23 +34,52 @@ class LifecycleManager:
         scheduler: SchedulerClient,
         events: LifecycleEventEmitter,
         queue: QueueService,
+        *,
+        trace_manager: TraceManager | None = None,
     ) -> None:
         self._registry = registry
         self._admission = admission
         self._scheduler = scheduler
         self._events = events
         self._queue = queue
+        self._trace = trace_manager
 
     async def process_through_queued(self, submit: SubmitRequest) -> RegisteredRequest:
         """RECEIVED -> VALIDATED -> ADMITTED -> QUEUED. Stops at QUEUED."""
         request_id = submit.inference_request.request_id
+        correlation_id = submit.request_context.trace_id
+        model = submit.inference_request.model
         try:
             self._queue.process_timeouts()
             entry = self.register(submit, initial_state=RequestState.RECEIVED)
-            entry = self.transition(request_id, RequestState.VALIDATED)
-            entry = await self.run_admission(request_id)
-            if entry.state == RequestState.REJECTED:
-                return entry
+            with optional_span(
+                self._trace,
+                SpanName.VALIDATION,
+                component=ComponentName.CONTROL_PLANE,
+                request_id=request_id,
+                correlation_id=correlation_id,
+                model=model,
+                request_state=RequestState.RECEIVED.value,
+            ) as validation_scope:
+                entry = self.transition(request_id, RequestState.VALIDATED)
+                validation_scope.set_request_context(request_state=RequestState.VALIDATED.value)
+            with optional_span(
+                self._trace,
+                SpanName.ADMISSION,
+                component=ComponentName.CONTROL_PLANE,
+                request_id=request_id,
+                correlation_id=correlation_id,
+                model=model,
+                request_state=RequestState.VALIDATED.value,
+            ) as admission_scope:
+                entry = await self.run_admission(request_id)
+                if entry.state == RequestState.REJECTED:
+                    admission_scope.record_rejection(
+                        entry.failure_message or "admission rejected",
+                        failure_type="admission_rejected",
+                    )
+                    return entry
+                admission_scope.set_request_context(request_state=RequestState.ADMITTED.value)
             if entry.state != RequestState.ADMITTED:
                 raise InternalFailure(
                     f"unexpected state after admission: {entry.state.value}"
@@ -154,13 +186,25 @@ class LifecycleManager:
         entry = self._registry.get(request_id)
         if entry.state != RequestState.SUBMITTED:
             raise InvalidTransitionError(str(request_id), entry.state, RequestState.COMPLETED)
-        updated = self.transition(request_id, RequestState.COMPLETED)
-        self._emit_state_event(
-            updated,
-            LifecycleEventType.REQUEST_COMPLETED,
-            extra=_trace_extra(updated),
-        )
-        return updated
+        with optional_span(
+            self._trace,
+            SpanName.COMPLETION,
+            component=ComponentName.CONTROL_PLANE,
+            request_id=request_id,
+            correlation_id=entry.request_context.trace_id,
+            batch_id=entry.batch_id,
+            backend_id=entry.backend_id,
+            model=entry.inference_request.model,
+            request_state=RequestState.SUBMITTED.value,
+        ) as completion_scope:
+            updated = self.transition(request_id, RequestState.COMPLETED)
+            completion_scope.set_request_context(request_state=RequestState.COMPLETED.value)
+            self._emit_state_event(
+                updated,
+                LifecycleEventType.REQUEST_COMPLETED,
+                extra=_trace_extra(updated),
+            )
+            return updated
 
     async def handoff_to_scheduler(self, request_id: UUID) -> RegisteredRequest:
         """No-op until scheduler exists."""

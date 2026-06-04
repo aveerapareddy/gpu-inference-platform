@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from gpu_inference_observability import StructuredLogger
 from gpu_inference_observability.runtime.recorder import RuntimeEventRecorder
 from gpu_inference_observability.registry.recorder import RuntimeMetricsRecorder
+from gpu_inference_observability.otel.manager import TraceManager
 
 from control_plane.admission.framework import AdmissionFramework
 from control_plane.config import Settings, get_settings
@@ -63,13 +64,15 @@ class ControlPlaneApplication:
 def create_application(
     settings: Settings | None = None,
     *,
+    admission: AdmissionFramework | None = None,
     trace_recorder: RuntimeEventRecorder | None = None,
     metrics_recorder: RuntimeMetricsRecorder | None = None,
+    trace_manager: TraceManager | None = None,
 ) -> ControlPlaneApplication:
     settings = settings or get_settings()
     logger = StructuredLogger(settings.service_name)
     registry = InMemoryRequestRegistry(max_entries=settings.registry_max_entries)
-    admission = AdmissionFramework()
+    admission = admission or AdmissionFramework()
     scheduler: SchedulerClient = StubSchedulerClient()
     events = LifecycleEventEmitter(
         logger,
@@ -82,8 +85,21 @@ def create_application(
         queue_timeout_ms=settings.queue_timeout_ms,
     )
     queue_ops = QueueOperations(queue_config)
-    queue = QueueService(registry, queue_ops, events, metrics_recorder=metrics_recorder)
-    lifecycle = LifecycleManager(registry, admission, scheduler, events, queue)
+    queue = QueueService(
+        registry,
+        queue_ops,
+        events,
+        metrics_recorder=metrics_recorder,
+        trace_manager=trace_manager,
+    )
+    lifecycle = LifecycleManager(
+        registry,
+        admission,
+        scheduler,
+        events,
+        queue,
+        trace_manager=trace_manager,
+    )
     queries = RegistryQueries(registry)
     return ControlPlaneApplication(
         settings=settings,

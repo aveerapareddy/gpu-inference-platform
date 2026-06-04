@@ -1,6 +1,6 @@
 # GPU Inference Platform
 
-Status: Foundation through Session 13 — Prometheus metrics export
+Status: Foundation through Session 14 — OpenTelemetry distributed tracing
 
 ## Engineering thesis
 
@@ -91,8 +91,9 @@ Read order: `docs/overview/project-constitution.md` →
 | Observability package (Session 3) | Complete (scaffolding) |
 | Runtime observability (Session 12) | Complete — trace store, events, timing, metrics models, snapshots (in-memory) |
 | Runtime metrics export (Session 13) | Complete — centralized registry, Prometheus `/metrics` on gateway |
+| OpenTelemetry tracing (Session 14) | Complete — span hierarchy, propagation, pluggable exporters |
 | Service scaffolds (Session 3) | Complete |
-| API gateway runtime | Session 12 — trace recording on integrated path |
+| API gateway runtime | Session 14 — integrated path with OpenTelemetry root span |
 | Control plane runtime | Session 12 — lifecycle/queue events recorded to trace store |
 | Scheduler runtime | Session 12 — scheduler/batch events recorded to trace store |
 | Inference adapter runtime | Session 12 — per-request backend events recorded |

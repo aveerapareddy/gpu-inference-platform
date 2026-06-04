@@ -42,13 +42,9 @@ class AdmissionFramework:
             return await _DefaultAccept().evaluate(entry)
 
         for check in checks:
-            if isinstance(check, AdmissionEvaluator):
-                result = await check.evaluate(entry)
-            elif isinstance(check, QueueCapacityCheck):
+            if hasattr(check, "check"):
                 result = await check.check(entry)
-            elif isinstance(check, TimeoutCheck):
-                result = await check.check(entry)
-            elif isinstance(check, PolicyEvaluator):
+            elif hasattr(check, "evaluate"):
                 result = await check.evaluate(entry)
             else:
                 continue
