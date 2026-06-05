@@ -1,6 +1,6 @@
 # Observability Package
 
-**Status:** Session 12 tracing + Session 13 metrics + Session 14 OpenTelemetry spans + Session 15 failure injection + Session 16 replay.
+**Status:** Session 12 tracing + Session 13 metrics + Session 14 OpenTelemetry spans + Session 15 failure injection + Session 16 replay + Session 17 persistence.
 
 ## Modules
 
@@ -14,6 +14,7 @@
 | `otel/` | Session 14 | OpenTelemetry trace manager and exporters |
 | `failure_injection/` | Session 15 | Deterministic failure injection config and injector |
 | `runtime/replay/` | Session 16 | Execution records, replay engine, reconstruction, comparison |
+| `persistence/` | Session 17 | Repository abstractions, SQLite backend, durable execution store |
 
 ## OpenTelemetry
 
@@ -39,6 +40,7 @@ Gateway `GET /metrics` when embedded stack is enabled.
 - OTel spans: [docs/architecture/tracing-model.md](../../docs/architecture/tracing-model.md)
 - Failure model: [docs/architecture/failure-model.md](../../docs/architecture/failure-model.md)
 - Replay and debugging: [docs/architecture/replay-and-debugging.md](../../docs/architecture/replay-and-debugging.md)
+- Runtime persistence: [docs/architecture/runtime-persistence.md](../../docs/architecture/runtime-persistence.md)
 
 ## Validation
 
@@ -48,6 +50,7 @@ python tests/integration/session13_metrics_validation.py
 python tests/integration/session14_otel_validation.py
 python runtime-validation/run_validation.py
 python runtime-validation/replay_validation.py
+python runtime-validation/persistence_validation.py
 ```
 
 ## Not implemented

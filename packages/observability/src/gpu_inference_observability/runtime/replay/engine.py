@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
 from uuid import UUID, uuid4
 
@@ -20,6 +21,7 @@ from gpu_inference_observability.runtime.replay.models import (
     replay_outcome_from_state,
 )
 from gpu_inference_observability.runtime.replay.store import ExecutionRecordStore
+from gpu_inference_observability.persistence.repository import RuntimeRepository
 
 
 ExecuteFn = Callable[[Any], Awaitable[Any]]
@@ -45,11 +47,13 @@ class ReplayEngine:
         inspector: TraceInspector,
         replay_events: ReplayEventEmitter,
         submit_builder: Callable[[RequestPayloadSnapshot], Any] | None = None,
+        runtime_repository: RuntimeRepository | None = None,
     ) -> None:
         self._store = execution_store
         self._inspector = inspector
         self._events = replay_events
         self._submit_builder = submit_builder
+        self._runtime_repository = runtime_repository
 
     @property
     def execution_store(self) -> ExecutionRecordStore:
@@ -77,8 +81,19 @@ class ReplayEngine:
             source_request_id=source_request_id,
             replay_id=replay_id,
         )
-        self._store.put(record)
+        self._store_record(record)
         return record
+
+    def _store_record(self, record: RequestExecutionRecord) -> None:
+        timeline = self._inspector.get_request_timeline(record.request_id)
+        from gpu_inference_observability.persistence.durable_store import DurableExecutionRecordStore
+
+        if isinstance(self._store, DurableExecutionRecordStore):
+            self._store.put(record, timeline=timeline)
+            return
+        self._store.put(record)
+        if self._runtime_repository is not None:
+            self._runtime_repository.persist_execution_record(record, timeline=timeline)
 
     def capture_from_entry(self, entry: Any) -> RequestExecutionRecord:
         failure_reason = entry.failure_reason.value if entry.failure_reason else None
@@ -102,6 +117,7 @@ class ReplayEngine:
         source_id = request.source_request_id
         payload = clone_payload_for_replay(request.payload, replay_id)
         events: list[str] = []
+        started_at = datetime.now(timezone.utc)
 
         self._events.emit(
             ReplayEventType.REPLAY_STARTED,
@@ -153,7 +169,7 @@ class ReplayEngine:
                 )
                 events.append(ReplayEventType.REQUEST_REPLAYED.value)
 
-            return ReplayResult(
+            result = ReplayResult(
                 replay_id=replay_id,
                 source_request_id=source_id,
                 replay_request_id=entry.request_id,
@@ -164,6 +180,8 @@ class ReplayEngine:
                 execution_record=record,
                 replay_events=tuple(events),
             )
+            self._persist_replay_result(result, started_at=started_at)
+            return result
         except Exception as exc:
             self._events.emit(
                 ReplayEventType.REPLAY_FAILED,
@@ -191,6 +209,15 @@ class ReplayEngine:
         replay: RequestExecutionRecord,
     ) -> ExecutionComparison:
         comparison = compare_executions(original, replay)
+        if self._runtime_repository is not None:
+            from uuid import uuid4
+
+            from gpu_inference_observability.persistence.models import replay_comparison_from_execution
+
+            self._runtime_repository.replays.save_comparison(
+                replay_comparison_from_execution(comparison, uuid4())
+            )
+            self._runtime_repository.commit()
         self._events.emit(
             ReplayEventType.COMPARISON_GENERATED,
             request_id=original.request_id,
@@ -221,6 +248,16 @@ class ReplayEngine:
         if self._submit_builder is None:
             raise RuntimeError("submit_builder is required for replay execution")
         return self._submit_builder(payload)
+
+
+    def _persist_replay_result(self, result: ReplayResult, *, started_at: datetime) -> None:
+        if self._runtime_repository is None:
+            return
+        self._runtime_repository.persist_replay_result(
+            result,
+            started_at=started_at,
+            completed_at=datetime.now(timezone.utc),
+        )
 
 
 def clone_payload_for_replay(

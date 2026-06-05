@@ -1,6 +1,6 @@
 # GPU Inference Platform
 
-Status: Foundation through Session 16 — replay and debugging
+Status: Foundation through Session 17 — runtime persistence
 
 ## Engineering thesis
 
@@ -94,6 +94,7 @@ Read order: `docs/overview/project-constitution.md` →
 | OpenTelemetry tracing (Session 14) | Complete — span hierarchy, propagation, pluggable exporters |
 | Failure injection and validation (Session 15) | Complete — deterministic injection, runtime-validation harness |
 | Replay and debugging (Session 16) | Complete — execution records, replay engine, reconstruction, comparison (in-memory) |
+| Runtime persistence (Session 17) | Complete — SQLite repository layer, restart recovery, durable execution history |
 | Service scaffolds (Session 3) | Complete |
 | API gateway runtime | Session 14 — integrated path with OpenTelemetry root span |
 | Control plane runtime | Session 12 — lifecycle/queue events recorded to trace store |

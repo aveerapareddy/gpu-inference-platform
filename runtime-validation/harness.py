@@ -17,6 +17,10 @@ from gpu_inference_observability.registry.recorder import RuntimeMetricsRecorder
 from gpu_inference_observability.registry.registry import MetricsRegistry, PROMETHEUS_PREFIX
 from gpu_inference_observability.runtime.inspection import TraceInspector
 from gpu_inference_observability.runtime.recorder import RuntimeEventRecorder
+from gpu_inference_observability.persistence.durable_store import DurableExecutionRecordStore
+from gpu_inference_observability.persistence.events import PersistenceEventEmitter
+from gpu_inference_observability.persistence.repository import RuntimeRepository
+from gpu_inference_observability.persistence.sqlite.runtime_repository import SqliteRuntimeRepository
 from gpu_inference_observability.runtime.replay.debugging import ReplayDebugService
 from gpu_inference_observability.runtime.replay.engine import ReplayEngine
 from gpu_inference_observability.runtime.replay.events import ReplayEventEmitter
@@ -154,12 +158,28 @@ class ValidationStack:
         failure_injector: FailureInjector | None = None,
         backend: MockInferenceBackend | InjectableMockBackend | None = None,
         admission: AdmissionFramework | None = None,
+        db_path: str | None = None,
     ) -> None:
         self.failure_injector = failure_injector or FailureInjector()
         self.trace_store = RequestTraceStore()
         self.trace_recorder = RuntimeEventRecorder(self.trace_store)
         self.trace_inspector = TraceInspector(self.trace_store)
-        self.execution_store = ExecutionRecordStore()
+        self.runtime_repository: RuntimeRepository | None = None
+        persistence_events: PersistenceEventEmitter | None = None
+        if db_path is not None:
+            persistence_events = PersistenceEventEmitter(
+                StructuredLogger("persistence"),
+                trace_recorder=self.trace_recorder,
+            )
+            self.runtime_repository = SqliteRuntimeRepository(db_path, events=persistence_events)
+            self.execution_store: ExecutionRecordStore = DurableExecutionRecordStore(
+                self.runtime_repository,
+                events=persistence_events,
+            )
+            if isinstance(self.execution_store, DurableExecutionRecordStore):
+                self.execution_store.recover()
+        else:
+            self.execution_store = ExecutionRecordStore()
         self.metrics_registry = MetricsRegistry()
         self.metrics_recorder = RuntimeMetricsRecorder(self.metrics_registry)
         TraceManager.clear_collected_spans()
@@ -170,6 +190,7 @@ class ValidationStack:
             inspector=self.trace_inspector,
             replay_events=replay_events,
             submit_builder=submit_from_payload,
+            runtime_repository=self.runtime_repository,
         )
         self.replay_debug = ReplayDebugService(self.replay_engine)
 
@@ -212,6 +233,7 @@ class ValidationStack:
             replay_engine=self.replay_engine,
             replay_debug=self.replay_debug,
         )
+        self.stack.runtime_repository = self.runtime_repository
         self.orchestrator = RequestPathOrchestrator(self.stack)
 
     async def startup(self) -> None:
@@ -220,6 +242,8 @@ class ValidationStack:
     async def shutdown(self) -> None:
         await self.stack.shutdown()
         self.trace_manager.force_flush()
+        if self.runtime_repository is not None:
+            self.runtime_repository.close()
 
     def metrics_export(self) -> str:
         return export_metrics(self.metrics_registry)
