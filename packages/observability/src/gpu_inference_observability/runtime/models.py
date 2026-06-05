@@ -15,6 +15,7 @@ class RuntimeComponent(StrEnum):
     SCHEDULER = "scheduler"
     ADAPTER = "adapter"
     BACKEND = "backend"
+    REPLAY = "replay"
 
 
 @dataclass(frozen=True, slots=True)

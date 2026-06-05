@@ -59,6 +59,8 @@ class IntegratedPlatformClient:
                         extra={"model": submit.inference_request.model},
                     )
                 entry = await self._orchestrator.execute_full_path(submit)
+                if self._stack.replay_engine is not None:
+                    self._stack.replay_engine.capture_from_entry(entry)
                 _request_scope.set_request_context(request_state=entry.state.value)
                 if entry.state == RequestState.REJECTED:
                     _raise_admission_error(entry)
