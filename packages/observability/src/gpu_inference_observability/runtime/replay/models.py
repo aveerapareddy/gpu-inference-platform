@@ -61,6 +61,7 @@ class RequestExecutionRecord:
     event_timeline: tuple[TraceEvent, ...]
     replay_id: UUID | None = None
     source_request_id: UUID | None = None
+    completion: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)

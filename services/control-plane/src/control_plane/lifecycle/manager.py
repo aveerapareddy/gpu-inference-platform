@@ -181,8 +181,13 @@ class LifecycleManager:
         self._emit_state_event(entry, LifecycleEventType.REQUEST_FAILED)
         return entry
 
-    def complete_request(self, request_id: UUID) -> RegisteredRequest:
-        """SUBMITTED -> COMPLETED. Simulated completion; no token generation."""
+    def complete_request(
+        self,
+        request_id: UUID,
+        *,
+        completion: InferenceCompletionRecord | None = None,
+    ) -> RegisteredRequest:
+        """SUBMITTED -> COMPLETED."""
         entry = self._registry.get(request_id)
         if entry.state != RequestState.SUBMITTED:
             raise InvalidTransitionError(str(request_id), entry.state, RequestState.COMPLETED)
@@ -197,12 +202,25 @@ class LifecycleManager:
             model=entry.inference_request.model,
             request_state=RequestState.SUBMITTED.value,
         ) as completion_scope:
+            if completion is not None:
+                entry.completion = completion
             updated = self.transition(request_id, RequestState.COMPLETED)
             completion_scope.set_request_context(request_state=RequestState.COMPLETED.value)
+            extra = _trace_extra(updated)
+            if completion is not None:
+                extra.update(
+                    {
+                        "prompt_tokens": completion.prompt_tokens,
+                        "completion_tokens": completion.completion_tokens,
+                        "total_tokens": completion.total_tokens,
+                        "finish_reason": completion.finish_reason,
+                        "execution_duration_ms": completion.execution_duration_ms,
+                    }
+                )
             self._emit_state_event(
                 updated,
                 LifecycleEventType.REQUEST_COMPLETED,
-                extra=_trace_extra(updated),
+                extra=extra,
             )
             return updated
 

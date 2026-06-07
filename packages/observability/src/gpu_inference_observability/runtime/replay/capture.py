@@ -97,6 +97,7 @@ def capture_execution_record(
     inspector: TraceInspector,
     source_request_id: UUID | None = None,
     replay_id: UUID | None = None,
+    completion: Any | None = None,
 ) -> RequestExecutionRecord:
     request_id = submit.inference_request.request_id
     correlation_id = submit.request_context.trace_id
@@ -130,6 +131,7 @@ def capture_execution_record(
         event_timeline=events,
         replay_id=replay_id,
         source_request_id=source_request_id or request_id,
+        completion=completion,
     )
 
 

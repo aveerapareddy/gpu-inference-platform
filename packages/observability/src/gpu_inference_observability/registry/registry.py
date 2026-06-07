@@ -183,6 +183,18 @@ class MetricsRegistry:
             buckets=_DURATION_BUCKETS,
             registry=self._registry,
         )
+        self.backend_prompt_tokens_total = Counter(
+            f"{PROMETHEUS_PREFIX}_backend_prompt_tokens_total",
+            "Prompt tokens returned by inference backend",
+            ["backend_id"],
+            registry=self._registry,
+        )
+        self.backend_completion_tokens_total = Counter(
+            f"{PROMETHEUS_PREFIX}_backend_completion_tokens_total",
+            "Completion tokens returned by inference backend",
+            ["backend_id"],
+            registry=self._registry,
+        )
 
     def export_prometheus(self) -> bytes:
         return generate_latest(self._registry)

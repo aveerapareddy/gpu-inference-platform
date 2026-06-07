@@ -7,6 +7,7 @@ dependencies = [
     "gpu-inference-common-schemas>=0.1.0",
     "gpu-inference-observability>=0.1.0",
     "pydantic-settings>=2.6,<3",
+    "httpx>=0.27,<1",
 ]
 
 [project.scripts]

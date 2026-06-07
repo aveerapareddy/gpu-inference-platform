@@ -208,7 +208,7 @@ async def scenario_scheduler_batch_rejection_trace() -> None:
         correlation_id=submit2.request_context.trace_id,
     ):
         result = await sched.run_scheduling_cycle()
-        entry = orchestrator._finalize_request(submit2.inference_request.request_id, result, submit2)
+        entry = await orchestrator._finalize_request(submit2.inference_request.request_id, result, submit2)
 
     assert entry.state == RequestState.FAILED
     trace_manager.force_flush()

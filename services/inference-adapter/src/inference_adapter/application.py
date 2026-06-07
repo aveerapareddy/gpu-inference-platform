@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from common_schemas.batch import Batch as DispatchBatch
+from common_schemas.completion import InferenceCompletionRecord
 from gpu_inference_observability import StructuredLogger
 from gpu_inference_observability.runtime.recorder import RuntimeEventRecorder
 from gpu_inference_observability.registry.recorder import RuntimeMetricsRecorder
@@ -23,9 +24,11 @@ from inference_adapter.backend.failures import (
 from inference_adapter.backend.models import (
     BatchSubmitResult,
     CancelRequestResult,
+    RequestCompletionResult,
     RequestStatusResult,
 )
 from inference_adapter.backend.state import BackendState
+from inference_adapter.completion import to_completion_record
 from inference_adapter.config import Settings, get_settings
 from inference_adapter.observability.events import BackendEventEmitter, BackendEventType
 from inference_adapter.registry.registry import BackendRegistry, RegisteredBackend
@@ -48,6 +51,8 @@ class InferenceAdapterApplication:
             "inference adapter starting",
             default_backend_id=self.settings.default_backend_id,
         )
+        for entry in self.registry.list_backends():
+            await self.refresh_backend_health(entry.backend.backend_id)
         self._running = True
         self.logger.info(
             "inference adapter ready",
@@ -85,15 +90,23 @@ class InferenceAdapterApplication:
             reason="registered",
             extra={"initial_state": initial_state.value},
         )
-        healthy_state = BackendState.HEALTHY if initial_state == BackendState.STARTING else initial_state
-        if initial_state == BackendState.STARTING:
-            self.registry.set_state(backend.backend_id, healthy_state)
-            self.events.emit(
-                BackendEventType.BACKEND_HEALTH_CHANGED,
-                backend_id=backend.backend_id,
-                reason="startup_health",
-                extra={"state": healthy_state.value},
-            )
+
+    async def refresh_backend_health(self, backend_id: str) -> None:
+        entry = self.registry.get_backend(backend_id)
+        if entry is None:
+            return
+        health = await entry.backend.health_check()
+        if health.state == "unavailable" or not health.healthy:
+            target = BackendState.UNHEALTHY if health.state == "unavailable" else BackendState.DEGRADED
+        else:
+            target = BackendState.HEALTHY
+        self.registry.set_state(backend_id, target)
+        self.events.emit(
+            BackendEventType.BACKEND_HEALTH_CHANGED,
+            backend_id=backend_id,
+            reason="health_check",
+            extra={"state": target.value, "health_state": health.state, "health_message": health.message},
+        )
 
     def remove_backend(self, backend_id: str) -> RegisteredBackend | None:
         removed = self.registry.remove_backend(backend_id)
@@ -200,6 +213,12 @@ class InferenceAdapterApplication:
                         target_id,
                         duration_seconds=duration,
                     )
+                    for completion in result.completions:
+                        self.metrics_recorder.record_backend_tokens(
+                            target_id,
+                            prompt_tokens=completion.prompt_tokens,
+                            completion_tokens=completion.completion_tokens,
+                        )
                 backend_scope.set_attribute("accepted", True)
                 self.events.emit(
                     BackendEventType.BATCH_ACCEPTED,
@@ -264,6 +283,21 @@ class InferenceAdapterApplication:
                 return existing.context.correlation_id
         return None
 
+    async def get_request_completion(
+        self,
+        request_id: UUID,
+        *,
+        backend_id: str | None = None,
+    ) -> InferenceCompletionRecord | None:
+        target_id = backend_id or self.settings.default_backend_id
+        backend = self.registry.get_backend_instance(target_id)
+        if hasattr(backend, "get_request_completion"):
+            result: RequestCompletionResult | None = await backend.get_request_completion(request_id)
+            if result is None:
+                return None
+            return to_completion_record(result)
+        return None
+
     async def get_request_status(
         self,
         request_id: UUID,
@@ -308,4 +342,23 @@ def create_application(
         from inference_adapter.backends.mock import MockInferenceBackend
 
         app.register_backend(MockInferenceBackend(backend_id=settings.default_backend_id))
+    if settings.register_vllm_backend:
+        from inference_adapter.backends.vllm import VLLMBackend, VLLMBackendConfig
+
+        app.register_backend(
+            VLLMBackend(
+                VLLMBackendConfig.from_values(
+                    backend_id=settings.default_backend_id,
+                    base_url=settings.vllm_base_url,
+                    default_model=settings.vllm_model,
+                    supported_models=settings.parsed_vllm_supported_models(),
+                    max_batch_size=settings.vllm_max_batch_size,
+                    request_timeout_seconds=settings.vllm_request_timeout_seconds,
+                    health_timeout_seconds=settings.vllm_health_timeout_seconds,
+                    api_key=settings.vllm_api_key,
+                    tensor_parallel_size=settings.vllm_tensor_parallel_size,
+                    gpu_memory_utilization=settings.vllm_gpu_memory_utilization,
+                )
+            )
+        )
     return app

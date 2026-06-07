@@ -48,7 +48,7 @@ class RequestPathOrchestrator:
             except Exception as exc:
                 scheduler_scope.record_failure("scheduler_cycle_error", str(exc))
                 raise
-            finalized = self._finalize_request(request_id, result, submit)
+            finalized = await self._finalize_request(request_id, result, submit)
             if finalized.state == RequestState.FAILED:
                 scheduler_scope.record_failure(
                     finalized.failure_reason.value if finalized.failure_reason else "failed",
@@ -56,7 +56,7 @@ class RequestPathOrchestrator:
                 )
             return finalized
 
-    def _finalize_request(
+    async def _finalize_request(
         self,
         request_id: UUID,
         result,
@@ -137,8 +137,12 @@ class RequestPathOrchestrator:
             backend_id=dispatch.backend_id,
         )
 
+        completion = await self._stack.adapter.get_request_completion(
+            request_id,
+            backend_id=dispatch.backend_id,
+        )
         batch_service.complete_request(request_id)
-        return lifecycle.complete_request(request_id)
+        return lifecycle.complete_request(request_id, completion=completion)
 
 
 def _find_placement(decisions, request_id: UUID) -> BatchPlacementDecision | None:

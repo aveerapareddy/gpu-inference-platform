@@ -113,9 +113,32 @@ async def process_chat_completion(
 
 
 def placeholder_chat_response(ctx: GatewayRequestContext) -> dict[str, Any]:
-    """Contract-shaped response after mock backend completion."""
+    """Contract-shaped response after backend completion."""
     created = int(ctx.received_timestamp.timestamp())
     state = ctx.lifecycle_state.value
+    completion = ctx.registered.completion if ctx.registered is not None else None
+    if completion is not None and completion.generated_text:
+        return {
+            "id": str(ctx.request_id),
+            "object": "chat.completion",
+            "created": created,
+            "model": ctx.inference_request.model,
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": completion.generated_text,
+                    },
+                    "finish_reason": completion.finish_reason or "stop",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": completion.prompt_tokens,
+                "completion_tokens": completion.completion_tokens,
+                "total_tokens": completion.total_tokens,
+            },
+        }
     return {
         "id": str(ctx.request_id),
         "object": "chat.completion",

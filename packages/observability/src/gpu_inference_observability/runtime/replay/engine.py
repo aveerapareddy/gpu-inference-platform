@@ -69,6 +69,7 @@ class ReplayEngine:
         *,
         source_request_id: UUID | None = None,
         replay_id: UUID | None = None,
+        completion: Any | None = None,
     ) -> RequestExecutionRecord:
         record = capture_execution_record(
             submit=terminal.submit,
@@ -80,6 +81,7 @@ class ReplayEngine:
             inspector=self._inspector,
             source_request_id=source_request_id,
             replay_id=replay_id,
+            completion=completion,
         )
         self._store_record(record)
         return record
@@ -105,7 +107,8 @@ class ReplayEngine:
                 failure_message=entry.failure_message,
                 batch_id=entry.batch_id,
                 backend_id=entry.backend_id,
-            )
+            ),
+            completion=getattr(entry, "completion", None),
         )
 
     async def replay(

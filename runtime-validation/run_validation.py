@@ -108,7 +108,7 @@ async def scenario_queue_corruption() -> None:
     assert stack.cp.queue.depth() == 0
     assert stack.cp.lifecycle.get_entry(submit.inference_request.request_id).state == RequestState.QUEUED
     result = await stack.scheduler.run_scheduling_cycle()
-    finalized = stack.orchestrator._finalize_request(
+    finalized = await stack.orchestrator._finalize_request(
         submit.inference_request.request_id,
         result,
         submit,
@@ -180,7 +180,7 @@ async def scenario_scheduler_invalid_decision() -> None:
     runner._selector.evaluate = _inject_phantom
     result = await stack.scheduler.run_scheduling_cycle()
     assert any(r.request_id == phantom_id for r in result.rejection_decisions)
-    finalized = stack.orchestrator._finalize_request(submit.inference_request.request_id, result, submit)
+    finalized = await stack.orchestrator._finalize_request(submit.inference_request.request_id, result, submit)
     assert finalized.state == RequestState.COMPLETED
     await stack.shutdown()
 
@@ -198,7 +198,7 @@ async def scenario_scheduler_invalid_batch_assignment() -> None:
     await stack.orchestrator.lifecycle.process_through_queued(submit)
     result = await stack.scheduler.run_scheduling_cycle()
     assert result.rejection_decisions
-    finalized = stack.orchestrator._finalize_request(submit.inference_request.request_id, result, submit)
+    finalized = await stack.orchestrator._finalize_request(submit.inference_request.request_id, result, submit)
     assert finalized.state == RequestState.FAILED
     export = stack.metrics_export()
     assert metric_value(export, f"{PROMETHEUS_PREFIX}_requests_failed_total") >= 1.0
@@ -228,7 +228,7 @@ async def scenario_batch_admission_failure() -> None:
     await stack.orchestrator.lifecycle.process_through_queued(submit)
     result = await stack.scheduler.run_scheduling_cycle()
     assert result.rejection_decisions
-    finalized = stack.orchestrator._finalize_request(submit.inference_request.request_id, result, submit)
+    finalized = await stack.orchestrator._finalize_request(submit.inference_request.request_id, result, submit)
     assert finalized.state == RequestState.FAILED
     await stack.shutdown()
 

@@ -112,6 +112,20 @@ class RuntimeMetricsRecorder:
             duration_seconds
         )
 
+    def record_backend_tokens(
+        self,
+        backend_id: str,
+        *,
+        prompt_tokens: int,
+        completion_tokens: int,
+    ) -> None:
+        if prompt_tokens:
+            self._registry.backend_prompt_tokens_total.labels(backend_id=backend_id).inc(prompt_tokens)
+        if completion_tokens:
+            self._registry.backend_completion_tokens_total.labels(backend_id=backend_id).inc(
+                completion_tokens
+            )
+
     def _finish_request(self, request_id: UUID) -> None:
         self._registry.active_requests.dec()
         with self._lock:

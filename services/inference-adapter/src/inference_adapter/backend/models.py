@@ -12,13 +12,34 @@ from common_schemas.batch import Batch as DispatchBatch
 
 
 class RequestExecutionStatus(StrEnum):
-    """Per-request status returned by a backend. No token generation."""
+    """Per-request status returned by a backend."""
 
     SUBMITTED = "submitted"
     ACKNOWLEDGED = "acknowledged"
+    COMPLETED = "completed"
     CANCELLED = "cancelled"
     FAILED = "failed"
     UNKNOWN = "unknown"
+
+
+class BackendHealthState(StrEnum):
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    UNAVAILABLE = "unavailable"
+
+
+@dataclass(frozen=True, slots=True)
+class RequestCompletionResult:
+    request_id: UUID
+    backend_id: str
+    generated_text: str
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    finish_reason: str | None
+    completed_at: datetime
+    execution_duration_ms: float | None = None
+    status: RequestExecutionStatus = RequestExecutionStatus.COMPLETED
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +67,7 @@ class BatchSubmitResult:
     accepted: bool
     reason: str
     submitted_at: datetime
+    completions: tuple[RequestCompletionResult, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True, slots=True)

@@ -25,7 +25,7 @@ BACKEND_FAILURE_STATES: frozenset[BackendState] = frozenset(
 
 ALLOWED_TRANSITIONS: dict[BackendState, frozenset[BackendState]] = {
     BackendState.UNKNOWN: frozenset({BackendState.STARTING, BackendState.STOPPED}),
-    BackendState.STARTING: frozenset({BackendState.HEALTHY, BackendState.UNHEALTHY, BackendState.STOPPED}),
+    BackendState.STARTING: frozenset({BackendState.HEALTHY, BackendState.DEGRADED, BackendState.UNHEALTHY, BackendState.STOPPED}),
     BackendState.HEALTHY: frozenset({BackendState.DEGRADED, BackendState.UNHEALTHY, BackendState.STOPPED}),
     BackendState.DEGRADED: frozenset({BackendState.HEALTHY, BackendState.UNHEALTHY, BackendState.STOPPED}),
     BackendState.UNHEALTHY: frozenset({BackendState.STARTING, BackendState.STOPPED}),

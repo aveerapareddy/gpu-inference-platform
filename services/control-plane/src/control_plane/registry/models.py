@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from common_schemas.inference_request import InferenceRequest, RequestContext, SubmitRequest
+from common_schemas.completion import InferenceCompletionRecord
 from common_schemas.states import FailureReason, RequestState
 
 
@@ -22,6 +23,7 @@ class RegisteredRequest:
     queue_position: int | None = None
     batch_id: UUID | None = None
     backend_id: str | None = None
+    completion: InferenceCompletionRecord | None = None
 
     @property
     def request_id(self):
