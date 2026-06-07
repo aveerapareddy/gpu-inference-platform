@@ -215,6 +215,36 @@ class MetricsRegistry:
             "Streaming sessions cancelled",
             registry=self._registry,
         )
+        self.routing_decisions_total = Counter(
+            f"{PROMETHEUS_PREFIX}_routing_decisions_total",
+            "Routing decisions completed",
+            ["model_id", "backend_id"],
+            registry=self._registry,
+        )
+        self.routing_failures_total = Counter(
+            f"{PROMETHEUS_PREFIX}_routing_failures_total",
+            "Routing failures",
+            ["model_id"],
+            registry=self._registry,
+        )
+        self.fallback_invocations_total = Counter(
+            f"{PROMETHEUS_PREFIX}_fallback_invocations_total",
+            "Routing fallback invocations",
+            ["model_id"],
+            registry=self._registry,
+        )
+        self.model_requests_total = Counter(
+            f"{PROMETHEUS_PREFIX}_model_requests_total",
+            "Requests routed by model",
+            ["model_id"],
+            registry=self._registry,
+        )
+        self.backend_selection_total = Counter(
+            f"{PROMETHEUS_PREFIX}_backend_selection_total",
+            "Backend selections from routing",
+            ["backend_id"],
+            registry=self._registry,
+        )
         self.backend_prompt_tokens_total = Counter(
             f"{PROMETHEUS_PREFIX}_backend_prompt_tokens_total",
             "Prompt tokens returned by inference backend",

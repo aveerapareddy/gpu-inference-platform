@@ -82,8 +82,23 @@ class InferenceAdapterApplication:
         backend,
         *,
         initial_state: BackendState = BackendState.STARTING,
+        supported_models: tuple[str, ...] | None = None,
+        latency_tier=None,
+        quality_tier=None,
+        max_batch_size: int | None = None,
+        metadata: dict | None = None,
     ) -> None:
-        self.registry.register_backend(backend, initial_state=initial_state)
+        from common_schemas.routing import LatencyTier, QualityTier
+
+        self.registry.register_backend(
+            backend,
+            initial_state=initial_state,
+            supported_models=supported_models,
+            latency_tier=latency_tier or LatencyTier.STANDARD,
+            quality_tier=quality_tier or QualityTier.STANDARD,
+            max_batch_size=max_batch_size,
+            metadata=metadata,
+        )
         self.events.emit(
             BackendEventType.BACKEND_REGISTERED,
             backend_id=backend.backend_id,
@@ -123,6 +138,9 @@ class InferenceAdapterApplication:
 
     def list_backends(self) -> list[RegisteredBackend]:
         return self.registry.list_backends()
+
+    def list_routable_backends(self):
+        return self.registry.list_routable_snapshots()
 
     async def submit_batch(
         self,

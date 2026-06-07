@@ -17,6 +17,7 @@ from control_plane.queue.service import QueueService
 from control_plane.queue.waiting_queue import QueueOperations
 from control_plane.observability.events import LifecycleEventEmitter
 from control_plane.registry.memory import InMemoryRequestRegistry
+from control_plane.registry.model_registry import ModelRegistry, default_model_registry
 from control_plane.registry.queries import RegistryQueries
 from control_plane.scheduler.client import SchedulerClient
 from control_plane.scheduler.stub import StubSchedulerClient
@@ -33,6 +34,7 @@ class ControlPlaneApplication:
     lifecycle: LifecycleManager
     queries: RegistryQueries
     queue: QueueService
+    model_registry: ModelRegistry
     _running: bool = False
 
     async def startup(self) -> None:
@@ -68,10 +70,12 @@ def create_application(
     trace_recorder: RuntimeEventRecorder | None = None,
     metrics_recorder: RuntimeMetricsRecorder | None = None,
     trace_manager: TraceManager | None = None,
+    model_registry: ModelRegistry | None = None,
 ) -> ControlPlaneApplication:
     settings = settings or get_settings()
     logger = StructuredLogger(settings.service_name)
     registry = InMemoryRequestRegistry(max_entries=settings.registry_max_entries)
+    models = model_registry or default_model_registry()
     admission = admission or AdmissionFramework()
     scheduler: SchedulerClient = StubSchedulerClient()
     events = LifecycleEventEmitter(
@@ -111,4 +115,5 @@ def create_application(
         lifecycle=lifecycle,
         queries=queries,
         queue=queue,
+        model_registry=models,
     )

@@ -10,31 +10,16 @@ from common_schemas.states import RequestState
 from api_gateway.control_plane.client import AcceptRequestResult
 from api_gateway.errors import GatewayError
 from common_schemas.states import FailureReason
+from control_plane.registry.model_registry import default_model_registry
 
-_STUB_MODELS: dict[str, ModelRecord] = {
-    "demo": ModelRecord(
-        model_id="demo",
-        backend="mock",
-        pool_id="default",
-        max_output_tokens=1024,
-        max_prompt_tokens=32768,
-        default_temperature=1.0,
-    ),
-    "example-model": ModelRecord(
-        model_id="example-model",
-        backend="mock",
-        pool_id="default",
-        max_output_tokens=256,
-        max_prompt_tokens=16384,
-    ),
-}
+_MODEL_REGISTRY = default_model_registry()
 
 
 class StubControlPlaneClient:
     """Model lookup only. Does not run lifecycle (use IntegratedControlPlaneClient)."""
 
     async def get_model(self, model_id: str) -> ModelRecord | None:
-        return _STUB_MODELS.get(model_id)
+        return _MODEL_REGISTRY.get_model(model_id)
 
     async def is_ready(self) -> bool:
         return True

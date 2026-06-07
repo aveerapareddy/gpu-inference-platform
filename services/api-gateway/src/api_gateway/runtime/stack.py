@@ -21,12 +21,17 @@ from gpu_inference_observability.runtime.replay.engine import ReplayEngine
 from gpu_inference_observability.runtime.replay.events import ReplayEventEmitter
 from gpu_inference_observability.runtime.replay.store import ExecutionRecordStore
 from gpu_inference_observability.runtime.store import RequestTraceStore
+from control_plane.routing.engine import RoutingEngine
+from control_plane.routing.events import RoutingEventEmitter
+from control_plane.routing.provider import AdapterBackendProvider
 from gpu_inference_observability.streaming.events import StreamEventEmitter
 from inference_adapter.application import InferenceAdapterApplication, create_application as create_adapter
+from inference_adapter.config import Settings as AdapterSettings
 from scheduler import ControlPlaneQueueReader, create_application as create_scheduler
 from scheduler.integrations.embedded_adapter import EmbeddedAdapterClient
 
 from api_gateway.runtime.replay import submit_from_payload
+from api_gateway.runtime.routing_setup import register_routing_backends
 
 
 @dataclass
@@ -45,6 +50,7 @@ class PlatformStack:
     replay_debug: ReplayDebugService | None = None
     runtime_repository: RuntimeRepository | None = None
     stream_events: StreamEventEmitter | None = None
+    routing_engine: RoutingEngine | None = None
 
     async def startup(self) -> None:
         await self.control_plane.startup()
@@ -104,15 +110,28 @@ def create_platform_stack(
         StructuredLogger("streaming"),
         trace_recorder=trace_recorder,
     )
+    routing_events = RoutingEventEmitter(
+        StructuredLogger("routing"),
+        trace_recorder=trace_recorder,
+    )
     cp = create_cp(
         trace_recorder=trace_recorder,
         metrics_recorder=metrics_recorder,
         trace_manager=trace_manager,
     )
     adapter = create_adapter(
+        AdapterSettings(register_mock_backend=False),
         trace_recorder=trace_recorder,
         metrics_recorder=metrics_recorder,
         trace_manager=trace_manager,
+    )
+    register_routing_backends(adapter)
+    backend_provider = AdapterBackendProvider(adapter)
+    routing_engine = RoutingEngine(
+        cp.model_registry,
+        backend_provider,
+        events=routing_events,
+        metrics_recorder=metrics_recorder,
     )
     scheduler = create_scheduler(
         ControlPlaneQueueReader(cp.queue),
@@ -120,6 +139,7 @@ def create_platform_stack(
         trace_recorder=trace_recorder,
         metrics_recorder=metrics_recorder,
         trace_manager=trace_manager,
+        routing_engine=routing_engine,
     )
     return PlatformStack(
         control_plane=cp,
@@ -136,4 +156,5 @@ def create_platform_stack(
         replay_debug=replay_debug,
         runtime_repository=runtime_repository,
         stream_events=stream_events,
+        routing_engine=routing_engine,
     )

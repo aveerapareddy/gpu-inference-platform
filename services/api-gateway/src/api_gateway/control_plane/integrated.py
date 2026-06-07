@@ -8,7 +8,7 @@ from common_schemas.inference_request import ModelRecord, SubmitRequest
 from common_schemas.states import FailureReason, RequestState
 
 from api_gateway.control_plane.client import AcceptRequestResult
-from api_gateway.control_plane.stub import _STUB_MODELS
+from api_gateway.control_plane.stub import _MODEL_REGISTRY
 from api_gateway.errors import GatewayError
 from control_plane.application import ControlPlaneApplication
 from control_plane.errors import InvalidTransitionError
@@ -23,7 +23,7 @@ class IntegratedControlPlaneClient:
         self._app = application
 
     async def get_model(self, model_id: str) -> ModelRecord | None:
-        return _STUB_MODELS.get(model_id)
+        return self._app.model_registry.get_model(model_id)
 
     async def is_ready(self) -> bool:
         return self._app.is_running

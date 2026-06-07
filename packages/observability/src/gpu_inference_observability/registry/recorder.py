@@ -144,6 +144,24 @@ class RuntimeMetricsRecorder:
     def record_itl(self, itl_seconds: float) -> None:
         self._registry.request_itl_seconds.observe(itl_seconds)
 
+    def record_routing_decision(self, *, model_id: str, backend_id: str) -> None:
+        self._registry.routing_decisions_total.labels(
+            model_id=model_id,
+            backend_id=backend_id,
+        ).inc()
+
+    def record_routing_failure(self, *, model_id: str) -> None:
+        self._registry.routing_failures_total.labels(model_id=model_id).inc()
+
+    def record_fallback_invocation(self, *, model_id: str) -> None:
+        self._registry.fallback_invocations_total.labels(model_id=model_id).inc()
+
+    def record_model_request(self, *, model_id: str) -> None:
+        self._registry.model_requests_total.labels(model_id=model_id).inc()
+
+    def record_backend_selection(self, *, backend_id: str) -> None:
+        self._registry.backend_selection_total.labels(backend_id=backend_id).inc()
+
     def _finish_request(self, request_id: UUID) -> None:
         self._registry.active_requests.dec()
         with self._lock:

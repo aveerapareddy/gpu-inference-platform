@@ -25,8 +25,7 @@ from scheduler.observability.events import SchedulerEventEmitter
 from scheduler.queue.reader import QueueReader
 from scheduler.dispatch.submitter import BatchDispatchService
 from scheduler.integrations.adapter import AdapterClient
-from scheduler.integrations.adapter import AdapterClient
-from scheduler.integrations.embedded_adapter import EmbeddedAdapterClient
+from scheduler.integrations.routing import RoutingEnginePort
 from scheduler.selection.fifo import FifoSelector
 
 
@@ -117,6 +116,7 @@ def create_application(
     metrics_recorder: RuntimeMetricsRecorder | None = None,
     trace_manager: TraceManager | None = None,
     failure_injector: FailureInjector | None = None,
+    routing_engine: RoutingEnginePort | None = None,
 ) -> SchedulerApplication:
     settings = settings or get_settings()
     logger = StructuredLogger(settings.service_name)
@@ -158,6 +158,7 @@ def create_application(
             batch,
             adapter_client,
             backend_id=settings.default_backend_id,
+            routing_engine=routing_engine,
         )
     return SchedulerApplication(
         settings=settings,

@@ -7,6 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from common_schemas.routing import ModelCapabilities, RoutingPolicyName
 from common_schemas.states import MessageRole, PriorityClass
 
 
@@ -68,3 +69,7 @@ class ModelRecord(BaseModel):
     max_output_tokens: int = Field(ge=1)
     max_prompt_tokens: int = Field(ge=1)
     default_temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    capabilities: ModelCapabilities = Field(default_factory=ModelCapabilities)
+    routing_policy: RoutingPolicyName = RoutingPolicyName.EXPLICIT
+    fallback_backend: str | None = None
+    metadata: dict[str, str] = Field(default_factory=dict)

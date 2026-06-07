@@ -8,7 +8,6 @@ from common_schemas.inference_request import ModelRecord, SubmitRequest
 from common_schemas.states import FailureReason, RequestState
 
 from api_gateway.control_plane.client import AcceptRequestResult
-from api_gateway.control_plane.stub import _STUB_MODELS
 from api_gateway.errors import GatewayError
 from api_gateway.runtime.orchestrator import RequestPathOrchestrator
 from api_gateway.runtime.stack import PlatformStack
@@ -31,7 +30,7 @@ class IntegratedPlatformClient:
         return self._stack
 
     async def get_model(self, model_id: str) -> ModelRecord | None:
-        return _STUB_MODELS.get(model_id)
+        return self._stack.control_plane.model_registry.get_model(model_id)
 
     async def is_ready(self) -> bool:
         return (
