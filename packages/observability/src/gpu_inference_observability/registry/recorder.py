@@ -162,6 +162,30 @@ class RuntimeMetricsRecorder:
     def record_backend_selection(self, *, backend_id: str) -> None:
         self._registry.backend_selection_total.labels(backend_id=backend_id).inc()
 
+    def set_gpu_device_metrics(
+        self,
+        *,
+        device_id: str,
+        utilization_percent: float,
+        memory_used_bytes: int,
+        memory_free_bytes: int,
+        memory_total_bytes: int,
+    ) -> None:
+        labels = {"device_id": device_id}
+        self._registry.gpu_utilization_percent.labels(**labels).set(utilization_percent)
+        self._registry.gpu_memory_used_bytes.labels(**labels).set(memory_used_bytes)
+        self._registry.gpu_memory_free_bytes.labels(**labels).set(memory_free_bytes)
+        self._registry.gpu_memory_total_bytes.labels(**labels).set(memory_total_bytes)
+
+    def set_kv_cache_estimated_bytes(self, value: int) -> None:
+        self._registry.kv_cache_estimated_bytes.set(value)
+
+    def set_active_sequences(self, value: int) -> None:
+        self._registry.active_sequences.set(value)
+
+    def set_capacity_remaining(self, value: int) -> None:
+        self._registry.capacity_remaining.set(value)
+
     def _finish_request(self, request_id: UUID) -> None:
         self._registry.active_requests.dec()
         with self._lock:

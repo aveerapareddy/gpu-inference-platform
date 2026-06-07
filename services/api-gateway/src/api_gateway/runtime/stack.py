@@ -12,6 +12,8 @@ from gpu_inference_observability.persistence.durable_store import DurableExecuti
 from gpu_inference_observability.persistence.events import PersistenceEventEmitter
 from gpu_inference_observability.persistence.repository import RuntimeRepository
 from gpu_inference_observability.persistence.sqlite.runtime_repository import SqliteRuntimeRepository
+from gpu_inference_observability.gpu.collector import GPUMetricsCollector, GPUCollectorConfig
+from gpu_inference_observability.gpu.events import CapacityEventEmitter
 from gpu_inference_observability.registry.recorder import RuntimeMetricsRecorder
 from gpu_inference_observability.registry.registry import MetricsRegistry
 from gpu_inference_observability.runtime.inspection import TraceInspector
@@ -30,6 +32,7 @@ from inference_adapter.config import Settings as AdapterSettings
 from scheduler import ControlPlaneQueueReader, create_application as create_scheduler
 from scheduler.integrations.embedded_adapter import EmbeddedAdapterClient
 
+from api_gateway.runtime.gpu_context import PlatformRuntimeContext
 from api_gateway.runtime.replay import submit_from_payload
 from api_gateway.runtime.routing_setup import register_routing_backends
 
@@ -51,11 +54,14 @@ class PlatformStack:
     runtime_repository: RuntimeRepository | None = None
     stream_events: StreamEventEmitter | None = None
     routing_engine: RoutingEngine | None = None
+    gpu_collector: GPUMetricsCollector | None = None
 
     async def startup(self) -> None:
         await self.control_plane.startup()
         await self.adapter.startup()
         await self.scheduler.startup()
+        if self.gpu_collector is not None:
+            self.gpu_collector.collect()
 
     async def shutdown(self) -> None:
         await self.scheduler.shutdown()
@@ -141,6 +147,21 @@ def create_platform_stack(
         trace_manager=trace_manager,
         routing_engine=routing_engine,
     )
+    gpu_events = CapacityEventEmitter(
+        StructuredLogger("gpu_observability"),
+        trace_recorder=trace_recorder,
+    )
+    runtime_context = PlatformRuntimeContext(
+        control_plane=cp,
+        scheduler=scheduler,
+        max_sequences=32,
+        max_batch_slot_limit=4,
+    )
+    gpu_collector = GPUMetricsCollector(
+        metrics_recorder=metrics_recorder,
+        context_provider=runtime_context,
+        events=gpu_events,
+    )
     return PlatformStack(
         control_plane=cp,
         scheduler=scheduler,
@@ -157,4 +178,5 @@ def create_platform_stack(
         runtime_repository=runtime_repository,
         stream_events=stream_events,
         routing_engine=routing_engine,
+        gpu_collector=gpu_collector,
     )

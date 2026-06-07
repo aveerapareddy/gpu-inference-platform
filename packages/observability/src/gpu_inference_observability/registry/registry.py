@@ -257,6 +257,45 @@ class MetricsRegistry:
             ["backend_id"],
             registry=self._registry,
         )
+        self.gpu_utilization_percent = Gauge(
+            f"{PROMETHEUS_PREFIX}_gpu_utilization_percent",
+            "GPU utilization percent",
+            ["device_id"],
+            registry=self._registry,
+        )
+        self.gpu_memory_used_bytes = Gauge(
+            f"{PROMETHEUS_PREFIX}_gpu_memory_used_bytes",
+            "GPU memory used bytes",
+            ["device_id"],
+            registry=self._registry,
+        )
+        self.gpu_memory_free_bytes = Gauge(
+            f"{PROMETHEUS_PREFIX}_gpu_memory_free_bytes",
+            "GPU memory free bytes",
+            ["device_id"],
+            registry=self._registry,
+        )
+        self.gpu_memory_total_bytes = Gauge(
+            f"{PROMETHEUS_PREFIX}_gpu_memory_total_bytes",
+            "GPU memory total bytes",
+            ["device_id"],
+            registry=self._registry,
+        )
+        self.kv_cache_estimated_bytes = Gauge(
+            f"{PROMETHEUS_PREFIX}_kv_cache_estimated_bytes",
+            "Estimated KV cache memory bytes",
+            registry=self._registry,
+        )
+        self.active_sequences = Gauge(
+            f"{PROMETHEUS_PREFIX}_active_sequences",
+            "Active inference sequences",
+            registry=self._registry,
+        )
+        self.capacity_remaining = Gauge(
+            f"{PROMETHEUS_PREFIX}_capacity_remaining",
+            "Estimated remaining concurrent sequence capacity",
+            registry=self._registry,
+        )
 
     def export_prometheus(self) -> bytes:
         return generate_latest(self._registry)

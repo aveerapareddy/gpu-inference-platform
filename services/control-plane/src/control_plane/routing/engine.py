@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Protocol
 from uuid import UUID
 
 from common_schemas.routing import RoutingResult, RoutableBackendSnapshot
