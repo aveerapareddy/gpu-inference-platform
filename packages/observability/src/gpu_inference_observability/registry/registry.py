@@ -183,6 +183,38 @@ class MetricsRegistry:
             buckets=_DURATION_BUCKETS,
             registry=self._registry,
         )
+        self.request_ttft_seconds = Histogram(
+            f"{PROMETHEUS_PREFIX}_request_ttft_seconds",
+            "Time from request received to first streamed token",
+            buckets=_DURATION_BUCKETS,
+            registry=self._registry,
+        )
+        self.request_itl_seconds = Histogram(
+            f"{PROMETHEUS_PREFIX}_request_itl_seconds",
+            "Inter-token latency during streaming decode",
+            buckets=_DURATION_BUCKETS,
+            registry=self._registry,
+        )
+        self.streams_created_total = Counter(
+            f"{PROMETHEUS_PREFIX}_streams_created_total",
+            "Streaming sessions created",
+            registry=self._registry,
+        )
+        self.streams_completed_total = Counter(
+            f"{PROMETHEUS_PREFIX}_streams_completed_total",
+            "Streaming sessions completed",
+            registry=self._registry,
+        )
+        self.streams_failed_total = Counter(
+            f"{PROMETHEUS_PREFIX}_streams_failed_total",
+            "Streaming sessions failed",
+            registry=self._registry,
+        )
+        self.streams_cancelled_total = Counter(
+            f"{PROMETHEUS_PREFIX}_streams_cancelled_total",
+            "Streaming sessions cancelled",
+            registry=self._registry,
+        )
         self.backend_prompt_tokens_total = Counter(
             f"{PROMETHEUS_PREFIX}_backend_prompt_tokens_total",
             "Prompt tokens returned by inference backend",

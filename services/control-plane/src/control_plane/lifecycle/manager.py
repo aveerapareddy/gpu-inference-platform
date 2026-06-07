@@ -187,9 +187,9 @@ class LifecycleManager:
         *,
         completion: InferenceCompletionRecord | None = None,
     ) -> RegisteredRequest:
-        """SUBMITTED -> COMPLETED."""
+        """SUBMITTED or STREAMING -> COMPLETED."""
         entry = self._registry.get(request_id)
-        if entry.state != RequestState.SUBMITTED:
+        if entry.state not in {RequestState.SUBMITTED, RequestState.STREAMING}:
             raise InvalidTransitionError(str(request_id), entry.state, RequestState.COMPLETED)
         with optional_span(
             self._trace,

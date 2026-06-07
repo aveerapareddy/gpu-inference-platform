@@ -81,6 +81,13 @@ def get_metrics_registry() -> MetricsRegistry | None:
     return stack.metrics_registry
 
 
+def get_platform_stack() -> PlatformStack | None:
+    settings = get_settings()
+    if not settings.full_path_integrated:
+        return None
+    return _get_platform_stack()
+
+
 def get_app_settings() -> Settings:
     return get_settings()
 

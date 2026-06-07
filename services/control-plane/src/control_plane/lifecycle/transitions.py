@@ -48,6 +48,8 @@ ALLOWED_REQUEST_TRANSITIONS: dict[RequestState, frozenset[RequestState]] = {
     ),
     RequestState.SUBMITTED: frozenset(
         {
+            RequestState.STREAMING,
+            RequestState.DECODING,
             RequestState.COMPLETED,
             RequestState.FAILED,
             RequestState.CANCELLED,

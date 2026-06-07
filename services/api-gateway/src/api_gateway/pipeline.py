@@ -9,6 +9,7 @@ from typing import Any
 from common_schemas.inference_request import SubmitRequest
 from common_schemas.states import RequestState
 from gpu_inference_observability import LogContext, StructuredLogger
+from gpu_inference_observability.streaming.models import StreamSession
 
 from api_gateway.config import Settings
 from api_gateway.context import GatewayRequestContext, build_request_context
@@ -16,7 +17,6 @@ from api_gateway.control_plane.client import ControlPlaneClient
 from api_gateway.schemas.openai import ChatCompletionRequestIn
 from api_gateway.validation import (
     build_inference_request,
-    ensure_streaming_not_requested,
     new_request_id,
     parse_chat_request,
     parse_completion_request,
@@ -30,7 +30,7 @@ def _api_key_id(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()[:16]
 
 
-async def process_chat_completion(
+async def _prepare_chat_request(
     *,
     raw_body: bytes,
     authorization: str | None,
@@ -38,10 +38,8 @@ async def process_chat_completion(
     client_request_header: str | None,
     settings: Settings,
     control_plane: ControlPlaneClient,
-    logger: StructuredLogger,
     is_legacy_completion: bool = False,
-) -> tuple[GatewayRequestContext, float]:
-    """Validate, register with control plane, advance lifecycle to QUEUED."""
+) -> tuple[GatewayRequestContext, SubmitRequest, float]:
     started = time.perf_counter()
     token = validate_api_key(authorization, settings)
     body = parse_json_body(raw_body, settings.max_body_bytes)
@@ -50,8 +48,6 @@ async def process_chat_completion(
         parsed = parse_completion_request(body)
     else:
         parsed = parse_chat_request(body)
-
-    ensure_streaming_not_requested(parsed.stream)
 
     request_id = new_request_id()
     model_record = resolve_model_record(
@@ -79,8 +75,7 @@ async def process_chat_completion(
         inference_request=ctx.inference_request,
         request_context=ctx.request_context,
     )
-    accept_result = await control_plane.accept_request(submit)
-
+    elapsed_ms = (time.perf_counter() - started) * 1000.0
     gateway_ctx = GatewayRequestContext(
         request_context=ctx.request_context,
         inference_request=ctx.inference_request,
@@ -88,11 +83,51 @@ async def process_chat_completion(
         received_timestamp=ctx.received_timestamp,
         requested_model=ctx.requested_model,
         trace=ctx.trace,
+        lifecycle_state=RequestState.RECEIVED,
+        registered=None,
+    )
+    return gateway_ctx, submit, elapsed_ms
+
+
+async def process_chat_completion(
+    *,
+    raw_body: bytes,
+    authorization: str | None,
+    correlation_header: str | None,
+    client_request_header: str | None,
+    settings: Settings,
+    control_plane: ControlPlaneClient,
+    logger: StructuredLogger,
+    is_legacy_completion: bool = False,
+) -> tuple[GatewayRequestContext, float]:
+    """Validate, register with control plane, advance lifecycle to terminal (non-stream)."""
+    gateway_ctx, submit, elapsed_ms = await _prepare_chat_request(
+        raw_body=raw_body,
+        authorization=authorization,
+        correlation_header=correlation_header,
+        client_request_header=client_request_header,
+        settings=settings,
+        control_plane=control_plane,
+        is_legacy_completion=is_legacy_completion,
+    )
+    if submit.inference_request.stream:
+        from api_gateway.errors import not_implemented
+
+        raise not_implemented("use streaming endpoint for stream=true requests")
+
+    accept_result = await control_plane.accept_request(submit)
+
+    gateway_ctx = GatewayRequestContext(
+        request_context=gateway_ctx.request_context,
+        inference_request=gateway_ctx.inference_request,
+        correlation_id=gateway_ctx.correlation_id,
+        received_timestamp=gateway_ctx.received_timestamp,
+        requested_model=gateway_ctx.requested_model,
+        trace=gateway_ctx.trace,
         lifecycle_state=accept_result.state,
         registered=accept_result.entry,
     )
 
-    elapsed_ms = (time.perf_counter() - started) * 1000.0
     log_ctx = LogContext(
         service=settings.service_name,
         request_id=gateway_ctx.request_id,
@@ -107,9 +142,71 @@ async def process_chat_completion(
         lifecycle_state=gateway_ctx.lifecycle_state.value,
         batch_id=str(accept_result.entry.batch_id) if accept_result.entry.batch_id else None,
         backend_id=accept_result.entry.backend_id,
-        message_count=len(inference_request.messages),
+        message_count=len(submit.inference_request.messages),
     )
     return gateway_ctx, elapsed_ms
+
+
+async def process_streaming_chat_completion(
+    *,
+    raw_body: bytes,
+    authorization: str | None,
+    correlation_header: str | None,
+    client_request_header: str | None,
+    settings: Settings,
+    control_plane: ControlPlaneClient,
+    logger: StructuredLogger,
+    is_legacy_completion: bool = False,
+) -> tuple[GatewayRequestContext, SubmitRequest, StreamSession, float]:
+    """Validate and queue streaming request; execution continues in StreamEngine."""
+    gateway_ctx, submit, elapsed_ms = await _prepare_chat_request(
+        raw_body=raw_body,
+        authorization=authorization,
+        correlation_header=correlation_header,
+        client_request_header=client_request_header,
+        settings=settings,
+        control_plane=control_plane,
+        is_legacy_completion=is_legacy_completion,
+    )
+    if not submit.inference_request.stream:
+        from api_gateway.errors import validation_error
+
+        raise validation_error("stream=true required for streaming endpoint", param="stream")
+
+    accept_result = await control_plane.accept_request(submit)
+    session = StreamSession.create(
+        request_id=submit.inference_request.request_id,
+        correlation_id=gateway_ctx.correlation_id,
+        model=submit.inference_request.model,
+        received_at=gateway_ctx.received_timestamp,
+    )
+
+    gateway_ctx = GatewayRequestContext(
+        request_context=gateway_ctx.request_context,
+        inference_request=gateway_ctx.inference_request,
+        correlation_id=gateway_ctx.correlation_id,
+        received_timestamp=gateway_ctx.received_timestamp,
+        requested_model=gateway_ctx.requested_model,
+        trace=gateway_ctx.trace,
+        lifecycle_state=accept_result.state,
+        registered=accept_result.entry,
+    )
+
+    log_ctx = LogContext(
+        service=settings.service_name,
+        request_id=gateway_ctx.request_id,
+        trace_id=gateway_ctx.correlation_id,
+        span_id=gateway_ctx.request_context.span_id,
+        model=gateway_ctx.requested_model,
+    )
+    logger.info(
+        "streaming request queued",
+        ctx=log_ctx,
+        validation_ms=round(elapsed_ms, 3),
+        lifecycle_state=gateway_ctx.lifecycle_state.value,
+        stream_id=str(session.stream_id),
+    )
+    return gateway_ctx, submit, session, elapsed_ms
 
 
 def placeholder_chat_response(ctx: GatewayRequestContext) -> dict[str, Any]:

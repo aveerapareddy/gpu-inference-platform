@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -12,6 +14,8 @@ import httpx
 
 from common_schemas.batch import Batch as DispatchBatch
 from common_schemas.states import MessageRole
+
+from gpu_inference_observability.streaming.models import StreamChunk
 
 from inference_adapter.backend.failures import (
     BackendInternalFailure,
@@ -148,6 +152,17 @@ class VLLMBackend:
                 submitted_at=now,
             )
 
+        if batch.assignments and any(a.inference_request.stream for a in batch.assignments):
+            for assignment in batch.assignments:
+                self._request_status[assignment.request_id] = RequestExecutionStatus.ACKNOWLEDGED
+            return BatchSubmitResult(
+                batch_id=batch.batch_id,
+                backend_id=self.backend_id,
+                accepted=True,
+                reason="vllm_stream_deferred",
+                submitted_at=now,
+            )
+
         completions: list[RequestCompletionResult] = []
         for assignment in batch.assignments:
             completion = await self._execute_request(
@@ -266,6 +281,81 @@ class VLLMBackend:
 
     async def get_request_completion(self, request_id: UUID) -> RequestCompletionResult | None:
         return self._completions.get(request_id)
+
+    async def stream_request(
+        self,
+        *,
+        request_id: UUID,
+        stream_id: UUID,
+        inference_request: Any,
+        model: str,
+        batch_id: UUID | None = None,
+    ) -> AsyncIterator[StreamChunk]:
+        client = await self._get_client()
+        payload = {
+            "model": model or self._config.default_model,
+            "messages": [
+                {"role": _message_role(message.role), "content": message.content}
+                for message in inference_request.messages
+            ],
+            "max_tokens": inference_request.max_tokens,
+            "stream": True,
+        }
+        index = 0
+        try:
+            async with client.stream("POST", "/v1/chat/completions", json=payload) as response:
+                if response.status_code >= 400:
+                    raise BackendInternalFailure(
+                        f"vllm stream error: {response.status_code}",
+                        backend_id=self.backend_id,
+                    )
+                async for line in response.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[len("data:") :].strip()
+                    if data == "[DONE]":
+                        break
+                    body = json.loads(data)
+                    choice = (body.get("choices") or [{}])[0]
+                    delta = choice.get("delta") or {}
+                    content = delta.get("content") or ""
+                    finish_reason = choice.get("finish_reason")
+                    if not content and finish_reason is None:
+                        continue
+                    yield StreamChunk(
+                        stream_id=stream_id,
+                        request_id=request_id,
+                        index=index,
+                        delta_text=content,
+                        finish_reason=finish_reason,
+                        timestamp=datetime.now(timezone.utc),
+                        is_first=index == 0 and bool(content),
+                    )
+                    if content:
+                        index += 1
+                    if finish_reason:
+                        break
+        except httpx.TimeoutException as exc:
+            raise BackendTimeout(
+                f"vllm stream timed out after {self._config.request_timeout_seconds}s",
+                backend_id=self.backend_id,
+            ) from exc
+        except httpx.RequestError as exc:
+            raise BackendUnavailable(
+                f"vllm stream failed: {exc}",
+                backend_id=self.backend_id,
+            ) from exc
+        if index == 0:
+            yield StreamChunk(
+                stream_id=stream_id,
+                request_id=request_id,
+                index=0,
+                delta_text="",
+                finish_reason="stop",
+                timestamp=datetime.now(timezone.utc),
+                is_first=True,
+            )
+        self._request_status[request_id] = RequestExecutionStatus.COMPLETED
 
     async def cancel_request(self, request_id: UUID) -> CancelRequestResult:
         if request_id not in self._request_status:

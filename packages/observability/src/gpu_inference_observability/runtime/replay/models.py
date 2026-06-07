@@ -62,6 +62,7 @@ class RequestExecutionRecord:
     replay_id: UUID | None = None
     source_request_id: UUID | None = None
     completion: Any | None = None
+    stream_metrics: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)

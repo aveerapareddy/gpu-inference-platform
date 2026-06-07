@@ -126,6 +126,24 @@ class RuntimeMetricsRecorder:
                 completion_tokens
             )
 
+    def record_stream_created(self) -> None:
+        self._registry.streams_created_total.inc()
+
+    def record_stream_completed(self) -> None:
+        self._registry.streams_completed_total.inc()
+
+    def record_stream_failed(self) -> None:
+        self._registry.streams_failed_total.inc()
+
+    def record_stream_cancelled(self) -> None:
+        self._registry.streams_cancelled_total.inc()
+
+    def record_ttft(self, ttft_seconds: float) -> None:
+        self._registry.request_ttft_seconds.observe(ttft_seconds)
+
+    def record_itl(self, itl_seconds: float) -> None:
+        self._registry.request_itl_seconds.observe(itl_seconds)
+
     def _finish_request(self, request_id: UUID) -> None:
         self._registry.active_requests.dec()
         with self._lock:

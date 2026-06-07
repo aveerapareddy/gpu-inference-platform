@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from uuid import UUID
 
 from common_schemas.batch import Batch as DispatchBatch
+
+from gpu_inference_observability.streaming.models import StreamChunk
 
 from inference_adapter.backend.contract import InferenceBackend
 from inference_adapter.backend.models import (
@@ -35,6 +38,8 @@ class MockInferenceBackend:
         self._reject = reject
         self._submitted_batches: set[UUID] = set()
         self._request_status: dict[UUID, RequestExecutionStatus] = {}
+        self._cancelled_requests: set[UUID] = set()
+        self._stream_fail: bool = False
 
     @property
     def backend_id(self) -> str:
@@ -97,6 +102,7 @@ class MockInferenceBackend:
                 reason="request_not_found",
             )
         self._request_status[request_id] = RequestExecutionStatus.CANCELLED
+        self._cancelled_requests.add(request_id)
         return CancelRequestResult(
             request_id=request_id,
             backend_id=self._backend_id,
@@ -124,3 +130,43 @@ class MockInferenceBackend:
 
     def was_batch_submitted(self, batch_id: UUID) -> bool:
         return batch_id in self._submitted_batches
+
+    def enable_stream_failure(self, enabled: bool = True) -> None:
+        self._stream_fail = enabled
+
+    async def stream_request(
+        self,
+        *,
+        request_id: UUID,
+        stream_id: UUID,
+        inference_request,
+        model: str,
+        batch_id: UUID | None = None,
+    ) -> AsyncIterator[StreamChunk]:
+        if self._stream_fail:
+            raise RuntimeError("mock stream failure injected")
+        if request_id in self._cancelled_requests:
+            return
+        tokens = ["mock", " stream", " output"]
+        for index, token in enumerate(tokens):
+            if request_id in self._cancelled_requests:
+                return
+            yield StreamChunk(
+                stream_id=stream_id,
+                request_id=request_id,
+                index=index,
+                delta_text=token,
+                finish_reason=None,
+                timestamp=datetime.now(timezone.utc),
+                is_first=index == 0,
+            )
+        yield StreamChunk(
+            stream_id=stream_id,
+            request_id=request_id,
+            index=len(tokens),
+            delta_text="",
+            finish_reason="stop",
+            timestamp=datetime.now(timezone.utc),
+            is_first=False,
+        )
+        self._request_status[request_id] = RequestExecutionStatus.COMPLETED

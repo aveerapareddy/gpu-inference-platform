@@ -186,6 +186,7 @@ def execution_record_to_dict(record: RequestExecutionRecord) -> dict[str, Any]:
         "replay_id": str(record.replay_id) if record.replay_id else None,
         "source_request_id": str(record.source_request_id) if record.source_request_id else None,
         "completion": _completion_to_dict(record.completion),
+        "stream_metrics": _completion_to_dict(record.stream_metrics),
     }
 
 
@@ -216,6 +217,7 @@ def execution_record_from_dict(data: dict[str, Any]) -> RequestExecutionRecord:
         replay_id=UUID(data["replay_id"]) if data.get("replay_id") else None,
         source_request_id=UUID(data["source_request_id"]) if data.get("source_request_id") else None,
         completion=_completion_from_dict(data.get("completion")),
+        stream_metrics=_stream_metrics_from_dict(data.get("stream_metrics")),
     )
 
 
@@ -225,6 +227,14 @@ def _completion_from_dict(data: dict[str, Any] | None):
     from common_schemas.completion import InferenceCompletionRecord
 
     return InferenceCompletionRecord.model_validate(data)
+
+
+def _stream_metrics_from_dict(data: dict[str, Any] | None):
+    if not data:
+        return None
+    from common_schemas.streaming import StreamingMetricsRecord
+
+    return StreamingMetricsRecord.model_validate(data)
 
 
 def request_metadata_to_dict(metadata: RequestMetadata) -> dict[str, Any]:

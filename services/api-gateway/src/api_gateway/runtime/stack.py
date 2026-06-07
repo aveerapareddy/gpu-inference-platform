@@ -21,6 +21,7 @@ from gpu_inference_observability.runtime.replay.engine import ReplayEngine
 from gpu_inference_observability.runtime.replay.events import ReplayEventEmitter
 from gpu_inference_observability.runtime.replay.store import ExecutionRecordStore
 from gpu_inference_observability.runtime.store import RequestTraceStore
+from gpu_inference_observability.streaming.events import StreamEventEmitter
 from inference_adapter.application import InferenceAdapterApplication, create_application as create_adapter
 from scheduler import ControlPlaneQueueReader, create_application as create_scheduler
 from scheduler.integrations.embedded_adapter import EmbeddedAdapterClient
@@ -43,6 +44,7 @@ class PlatformStack:
     replay_engine: ReplayEngine | None = None
     replay_debug: ReplayDebugService | None = None
     runtime_repository: RuntimeRepository | None = None
+    stream_events: StreamEventEmitter | None = None
 
     async def startup(self) -> None:
         await self.control_plane.startup()
@@ -98,6 +100,10 @@ def create_platform_stack(
         runtime_repository=runtime_repository,
     )
     replay_debug = ReplayDebugService(replay_engine)
+    stream_events = StreamEventEmitter(
+        StructuredLogger("streaming"),
+        trace_recorder=trace_recorder,
+    )
     cp = create_cp(
         trace_recorder=trace_recorder,
         metrics_recorder=metrics_recorder,
@@ -129,4 +135,5 @@ def create_platform_stack(
         replay_engine=replay_engine,
         replay_debug=replay_debug,
         runtime_repository=runtime_repository,
+        stream_events=stream_events,
     )

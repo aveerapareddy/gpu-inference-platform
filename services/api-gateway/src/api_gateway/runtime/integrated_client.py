@@ -58,6 +58,19 @@ class IntegratedPlatformClient:
                         correlation_id=correlation_id,
                         extra={"model": submit.inference_request.model},
                     )
+                if submit.inference_request.stream:
+                    entry = await self._stack.control_plane.lifecycle.process_through_queued(submit)
+                    if entry.state == RequestState.REJECTED:
+                        _raise_admission_error(entry)
+                    if entry.state == RequestState.FAILED:
+                        _raise_execution_error(entry)
+                    if entry.state != RequestState.QUEUED:
+                        raise GatewayError(
+                            error_type=FailureReason.INTERNAL_ERROR,
+                            message=f"unexpected pre-stream state: {entry.state.value}",
+                            status_code=500,
+                        )
+                    return AcceptRequestResult(entry)
                 entry = await self._orchestrator.execute_full_path(submit)
                 if self._stack.replay_engine is not None:
                     self._stack.replay_engine.capture_from_entry(entry)

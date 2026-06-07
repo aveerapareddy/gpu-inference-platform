@@ -8,6 +8,7 @@ from uuid import UUID
 
 from common_schemas.inference_request import InferenceRequest, RequestContext, SubmitRequest
 from common_schemas.completion import InferenceCompletionRecord
+from common_schemas.streaming import StreamingMetricsRecord
 from common_schemas.states import FailureReason, RequestState
 
 
@@ -24,6 +25,7 @@ class RegisteredRequest:
     batch_id: UUID | None = None
     backend_id: str | None = None
     completion: InferenceCompletionRecord | None = None
+    stream_metrics: StreamingMetricsRecord | None = None
 
     @property
     def request_id(self):

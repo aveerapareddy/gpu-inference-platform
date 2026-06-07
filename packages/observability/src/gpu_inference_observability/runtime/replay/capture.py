@@ -98,6 +98,7 @@ def capture_execution_record(
     source_request_id: UUID | None = None,
     replay_id: UUID | None = None,
     completion: Any | None = None,
+    stream_metrics: Any | None = None,
 ) -> RequestExecutionRecord:
     request_id = submit.inference_request.request_id
     correlation_id = submit.request_context.trace_id
@@ -132,6 +133,7 @@ def capture_execution_record(
         replay_id=replay_id,
         source_request_id=source_request_id or request_id,
         completion=completion,
+        stream_metrics=stream_metrics,
     )
 
 

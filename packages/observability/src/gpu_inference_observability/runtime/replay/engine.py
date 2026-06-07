@@ -70,6 +70,7 @@ class ReplayEngine:
         source_request_id: UUID | None = None,
         replay_id: UUID | None = None,
         completion: Any | None = None,
+        stream_metrics: Any | None = None,
     ) -> RequestExecutionRecord:
         record = capture_execution_record(
             submit=terminal.submit,
@@ -82,6 +83,7 @@ class ReplayEngine:
             source_request_id=source_request_id,
             replay_id=replay_id,
             completion=completion,
+            stream_metrics=stream_metrics,
         )
         self._store_record(record)
         return record
@@ -109,6 +111,7 @@ class ReplayEngine:
                 backend_id=entry.backend_id,
             ),
             completion=getattr(entry, "completion", None),
+            stream_metrics=getattr(entry, "stream_metrics", None),
         )
 
     async def replay(

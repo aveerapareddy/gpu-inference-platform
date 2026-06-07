@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from uuid import UUID
 
 from common_schemas.inference_request import SubmitRequest
 from common_schemas.states import FailureReason, RequestState, is_terminal_request_state
 
 from api_gateway.runtime.stack import PlatformStack
-from control_plane.errors import InvalidTransitionError
+from control_plane.errors import InvalidTransitionError, RequestNotFoundError
 from control_plane.registry.models import RegisteredRequest
 from gpu_inference_observability.otel.helpers import optional_span
 from gpu_inference_observability.otel.spans import ComponentName, SpanName
+from gpu_inference_observability.streaming.models import StreamChunk, StreamSession
+from inference_adapter.streaming.bridge import stream_inference_request
 from scheduler.models.batch_decision import BatchPlacementDecision, BatchRejectionDecision
 
 
@@ -55,6 +58,68 @@ class RequestPathOrchestrator:
                     finalized.failure_message or "request_failed",
                 )
             return finalized
+
+    async def execute_streaming_path(
+        self,
+        submit: SubmitRequest,
+        session: StreamSession,
+    ) -> AsyncIterator[StreamChunk]:
+        request_id = submit.inference_request.request_id
+        try:
+            entry = self.lifecycle.get_entry(request_id)
+        except RequestNotFoundError:
+            entry = await self.lifecycle.process_through_queued(submit)
+        else:
+            if entry.state != RequestState.QUEUED:
+                if is_terminal_request_state(entry.state):
+                    raise RuntimeError(f"request terminated before streaming: {entry.state.value}")
+                if entry.state not in {RequestState.RECEIVED, RequestState.VALIDATED, RequestState.ADMITTED}:
+                    raise RuntimeError(f"unexpected pre-stream state: {entry.state.value}")
+                entry = await self.lifecycle.process_through_queued(submit)
+        if is_terminal_request_state(entry.state):
+            raise RuntimeError(f"request terminated before streaming: {entry.state.value}")
+        if entry.state != RequestState.QUEUED:
+            raise RuntimeError(f"unexpected pre-stream state: {entry.state.value}")
+
+        result = await self._stack.scheduler.run_scheduling_cycle()
+        placement = _find_placement(result.placement_decisions, request_id)
+        batch_rejection = _find_batch_rejection(result.rejection_decisions, request_id)
+        if batch_rejection is not None:
+            self.lifecycle.mark_failed(request_id, FailureReason.ADAPTER_ERROR, batch_rejection.decision_reason)
+            raise RuntimeError(batch_rejection.decision_reason)
+        if placement is None:
+            self.lifecycle.mark_failed(request_id, FailureReason.INTERNAL_ERROR, "scheduler_did_not_select_request")
+            raise RuntimeError("scheduler_did_not_select_request")
+
+        self.lifecycle.transition(request_id, RequestState.SCHEDULED, batch_id=placement.batch_id)
+        self.lifecycle.transition(request_id, RequestState.BATCHED)
+
+        dispatch = _find_dispatch(result.dispatch_results, placement.batch_id)
+        if dispatch is None or not dispatch.accepted:
+            reason = dispatch.reason if dispatch else "batch_not_dispatched"
+            self.lifecycle.mark_failed(request_id, FailureReason.ADAPTER_ERROR, reason, batch_id=placement.batch_id)
+            raise RuntimeError(reason)
+
+        session.context.batch_id = placement.batch_id
+        session.context.backend_id = dispatch.backend_id
+        self.lifecycle.transition(request_id, RequestState.SUBMITTED, backend_id=dispatch.backend_id)
+        self.lifecycle.transition(request_id, RequestState.STREAMING)
+
+        registered = self._stack.adapter.get_backend(dispatch.backend_id)
+        if registered is None:
+            raise RuntimeError(f"backend not found: {dispatch.backend_id}")
+        async for chunk in stream_inference_request(
+            registered.backend,
+            request_id=request_id,
+            stream_id=session.stream_id,
+            inference_request=submit.inference_request,
+            model=submit.inference_request.model,
+            batch_id=placement.batch_id,
+        ):
+            yield chunk
+
+        self._stack.scheduler.batch.complete_request(request_id)
+        self.lifecycle.complete_request(request_id)
 
     async def _finalize_request(
         self,
