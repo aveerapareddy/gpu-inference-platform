@@ -1,0 +1,5 @@
+{
+  "short": "Summarize GPU batching in one sentence.",
+  "medium": "Explain how continuous batching improves GPU utilization in LLM serving. Cover admission control, queue wait, and when batching helps versus when it adds latency for short requests.",
+  "long": "Write a technical overview of LLM inference serving architecture. Include request lifecycle, scheduling, batch formation, backend adapter boundaries, streaming token delivery, observability signals such as TTFT and ITL, and failure modes when queues fill or backends reject work. Keep the explanation operational and tied to measurable signals rather than marketing claims."
+}

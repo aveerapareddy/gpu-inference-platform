@@ -1,0 +1,10 @@
+{
+  "scenario_id": "mixed_workload",
+  "name": "mixed_workload",
+  "description": "Alternating synchronous and streaming requests",
+  "concurrency": 4,
+  "request_count": 4,
+  "workload_profile": "mixed",
+  "stream": false,
+  "mixed_stream_ratio": 0.5
+}

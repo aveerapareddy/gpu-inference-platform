@@ -1,0 +1,9 @@
+{
+  "scenario_id": "single_request",
+  "name": "single_request",
+  "description": "One synchronous completion request",
+  "concurrency": 1,
+  "request_count": 1,
+  "workload_profile": "short_prompt",
+  "stream": false
+}

@@ -1,0 +1,9 @@
+{
+  "scenario_id": "medium_concurrency",
+  "name": "medium_concurrency",
+  "description": "Five concurrent synchronous requests",
+  "concurrency": 5,
+  "request_count": 5,
+  "workload_profile": "medium_prompt",
+  "stream": false
+}

@@ -1,0 +1,9 @@
+{
+  "scenario_id": "low_concurrency",
+  "name": "low_concurrency",
+  "description": "Two concurrent synchronous requests",
+  "concurrency": 2,
+  "request_count": 2,
+  "workload_profile": "short_prompt",
+  "stream": false
+}

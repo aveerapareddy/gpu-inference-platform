@@ -1,0 +1,9 @@
+{
+  "scenario_id": "high_concurrency",
+  "name": "high_concurrency",
+  "description": "Ten concurrent synchronous requests",
+  "concurrency": 10,
+  "request_count": 10,
+  "workload_profile": "medium_prompt",
+  "stream": false
+}

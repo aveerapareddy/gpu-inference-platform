@@ -1,0 +1,9 @@
+{
+  "scenario_id": "streaming_workload",
+  "name": "streaming_workload",
+  "description": "Streaming requests at low concurrency",
+  "concurrency": 2,
+  "request_count": 2,
+  "workload_profile": "streaming",
+  "stream": true
+}
