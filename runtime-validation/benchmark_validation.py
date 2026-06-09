@@ -60,7 +60,8 @@ async def verify_scenario_definitions() -> None:
         "streaming_workload",
         "mixed_workload",
     }
-    assert expected == set(list_scenario_ids())
+    available = set(list_scenario_ids())
+    assert expected.issubset(available)
 
 
 async def verify_single_request_run(tmp_dir: Path) -> BenchmarkRun:

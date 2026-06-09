@@ -13,10 +13,10 @@ from common_schemas.states import MessageRole, RequestState
 from gpu_inference_observability.registry.registry import PROMETHEUS_PREFIX
 from gpu_inference_observability.streaming.models import StreamSession
 
-from benchmarks.runner.metadata import capture_hardware_metadata, capture_model_metadata
+from benchmarks.runner.metadata import capture_benchmark_environment, capture_hardware_metadata, capture_model_metadata
 from benchmarks.runner.metrics import build_summary, snapshot_prometheus_metrics
 from benchmarks.runner.models import BenchmarkResult, BenchmarkRun, BenchmarkScenario
-from benchmarks.runner.profiles import get_profile, prompt_for_profile
+from benchmarks.runner.profiles import estimated_input_tokens_for_profile, get_profile, prompt_for_profile
 from benchmarks.runner.store import persist_run
 
 
@@ -58,14 +58,54 @@ def _queue_wait_from_trace(inspector, request_id) -> float | None:
     return None
 
 
-async def _run_sync_request(stack, submit: SubmitRequest, index: int, profile) -> BenchmarkResult:
+def _result_base_fields(profile, *, stream: bool) -> dict:
+    return {
+        "stream": stream,
+        "prompt_chars": len(prompt_for_profile(profile)),
+        "max_tokens": profile.max_tokens,
+        "estimated_input_tokens": estimated_input_tokens_for_profile(profile),
+    }
+
+
+def _tokens_from_entry(entry) -> int | None:
+    if entry is None:
+        return None
+    if entry.completion is not None:
+        return entry.completion.completion_tokens
+    if entry.stream_metrics is not None:
+        return entry.stream_metrics.token_count
+    return None
+
+
+def _apply_gpu_metrics(result: BenchmarkResult, snapshot) -> BenchmarkResult:
+    if not snapshot.devices:
+        return result
+    device = snapshot.devices[0]
+    return result.model_copy(
+        update={
+            "gpu_utilization_percent": device.utilization_percent,
+            "gpu_memory_used_bytes": device.memory_used_bytes,
+            "gpu_metrics_source": device.source.value,
+        }
+    )
+
+
+async def _run_sync_request(
+    stack,
+    submit: SubmitRequest,
+    index: int,
+    profile,
+    *,
+    gpu_collector=None,
+) -> BenchmarkResult:
+    base = _result_base_fields(profile, stream=False)
     started = time.perf_counter()
     try:
         entry = await stack.orchestrator.execute_full_path(submit)
         elapsed_ms = (time.perf_counter() - started) * 1000.0
         success = entry.state == RequestState.COMPLETED
         queue_wait = _queue_wait_from_trace(stack.trace_inspector, submit.inference_request.request_id)
-        return BenchmarkResult(
+        result = BenchmarkResult(
             request_index=index,
             request_id=str(submit.inference_request.request_id),
             success=success,
@@ -74,10 +114,12 @@ async def _run_sync_request(stack, submit: SubmitRequest, index: int, profile) -
             queue_wait_ms=queue_wait,
             scheduler_latency_ms=queue_wait,
             batch_latency_ms=elapsed_ms,
-            stream=False,
-            prompt_chars=len(prompt_for_profile(profile)),
-            max_tokens=profile.max_tokens,
+            tokens_generated=_tokens_from_entry(entry) if not success else (_tokens_from_entry(entry) or 0),
+            **base,
         )
+        if gpu_collector is not None:
+            result = _apply_gpu_metrics(result, gpu_collector.collect())
+        return result
     except Exception as exc:
         elapsed_ms = (time.perf_counter() - started) * 1000.0
         return BenchmarkResult(
@@ -86,13 +128,18 @@ async def _run_sync_request(stack, submit: SubmitRequest, index: int, profile) -
             success=False,
             error=str(exc),
             latency_ms=elapsed_ms,
-            stream=False,
-            prompt_chars=len(prompt_for_profile(profile)),
-            max_tokens=profile.max_tokens,
+            **base,
         )
 
 
-async def _run_stream_request(stack, submit: SubmitRequest, index: int, profile) -> BenchmarkResult:
+async def _run_stream_request(
+    stack,
+    submit: SubmitRequest,
+    index: int,
+    profile,
+    *,
+    gpu_collector=None,
+) -> BenchmarkResult:
     from api_gateway.streaming.engine import StreamEngine
 
     started = time.perf_counter()
@@ -102,18 +149,21 @@ async def _run_stream_request(stack, submit: SubmitRequest, index: int, profile)
         model=submit.inference_request.model,
     )
     engine = StreamEngine(stack.stack, stream_events=stack.stack.stream_events)
-    chunks = 0
+    base = _result_base_fields(profile, stream=True)
     try:
         await stack.orchestrator.lifecycle.process_through_queued(submit)
         async for _sse in engine.stream_sse(session, submit):
-            chunks += 1
+            pass
         elapsed_ms = (time.perf_counter() - started) * 1000.0
         entry = stack.cp.lifecycle.get_entry(submit.inference_request.request_id)
         success = entry.state == RequestState.COMPLETED
         ttft = session.timing.ttft_ms
         itl = session.timing.inter_token_latencies_ms()
         queue_wait = _queue_wait_from_trace(stack.trace_inspector, submit.inference_request.request_id)
-        return BenchmarkResult(
+        tokens = _tokens_from_entry(entry)
+        if tokens is None and itl:
+            tokens = len(itl)
+        result = BenchmarkResult(
             request_index=index,
             request_id=str(submit.inference_request.request_id),
             success=success,
@@ -123,10 +173,12 @@ async def _run_stream_request(stack, submit: SubmitRequest, index: int, profile)
             queue_wait_ms=queue_wait,
             scheduler_latency_ms=queue_wait,
             batch_latency_ms=elapsed_ms,
-            stream=True,
-            prompt_chars=len(prompt_for_profile(profile)),
-            max_tokens=profile.max_tokens,
+            tokens_generated=tokens,
+            **base,
         )
+        if gpu_collector is not None:
+            result = _apply_gpu_metrics(result, gpu_collector.collect())
+        return result
     except Exception as exc:
         elapsed_ms = (time.perf_counter() - started) * 1000.0
         return BenchmarkResult(
@@ -135,9 +187,7 @@ async def _run_stream_request(stack, submit: SubmitRequest, index: int, profile)
             success=False,
             error=str(exc),
             latency_ms=elapsed_ms,
-            stream=True,
-            prompt_chars=len(prompt_for_profile(profile)),
-            max_tokens=profile.max_tokens,
+            **base,
         )
 
 
@@ -146,6 +196,8 @@ async def _run_one(
     scenario: BenchmarkScenario,
     profile,
     index: int,
+    *,
+    gpu_collector=None,
 ) -> BenchmarkResult:
     use_stream = scenario.stream
     if scenario.workload_profile == "mixed" and scenario.mixed_stream_ratio is not None:
@@ -161,8 +213,8 @@ async def _run_one(
         stream=use_stream,
     )
     if use_stream:
-        return await _run_stream_request(stack, submit, index, active_profile)
-    return await _run_sync_request(stack, submit, index, active_profile)
+        return await _run_stream_request(stack, submit, index, active_profile, gpu_collector=gpu_collector)
+    return await _run_sync_request(stack, submit, index, active_profile, gpu_collector=gpu_collector)
 
 
 async def run_embedded_scenario(
@@ -172,10 +224,12 @@ async def run_embedded_scenario(
     results_dir=None,
     persist: bool = True,
     metrics_export: Callable[[], str] | None = None,
+    gpu_collector_factory: Callable[[object], object] | None = None,
 ) -> BenchmarkRun:
     profile = get_profile(scenario.workload_profile)
     hardware = capture_hardware_metadata()
     model_meta = capture_model_metadata(model_id="demo", backend_id="mock", stream=scenario.stream)
+    environment = capture_benchmark_environment(model_id="demo", backend_id="mock", stream=scenario.stream)
 
     metric_names = (
         f"{PROMETHEUS_PREFIX}_requests_completed_total",
@@ -198,7 +252,8 @@ async def run_embedded_scenario(
         pre_metrics = snapshot_prometheus_metrics(export_fn(), metric_names) if export_fn else {}
 
         await stack.startup()
-        results.append(await _run_one(stack, scenario, profile, index))
+        gpu_collector = gpu_collector_factory(stack) if gpu_collector_factory else None
+        results.append(await _run_one(stack, scenario, profile, index, gpu_collector=gpu_collector))
         post_metrics = snapshot_prometheus_metrics(export_fn(), metric_names) if export_fn else {}
         for key in metric_names:
             combined_metrics[key] += post_metrics.get(key, 0.0) - pre_metrics.get(key, 0.0)
@@ -212,6 +267,7 @@ async def run_embedded_scenario(
 
     run = BenchmarkRun(
         scenario=scenario,
+        environment=environment,
         hardware=hardware,
         model=model_meta,
         started_at=started_at,

@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from benchmarks.runner.tokens import ESTIMATION_METHOD, estimate_input_tokens
 PROFILES_DIR = Path(__file__).resolve().parents[1]
 DATASETS_DIR = PROFILES_DIR / "datasets"
 PROMPTS_PATH = DATASETS_DIR / "prompts.json"
@@ -20,6 +21,9 @@ class WorkloadProfile:
     input_size_label: str
     output_size_label: str
     expected_behavior: str
+    target_output_tokens: int
+    rationale: str
+    token_estimation_method: str = ESTIMATION_METHOD
 
 
 def _load_prompts() -> dict[str, str]:
@@ -39,7 +43,9 @@ SHORT_PROMPT_PROFILE = WorkloadProfile(
     stream=False,
     input_size_label="~10 words",
     output_size_label="<=32 tokens",
-    expected_behavior="Fast synchronous completion on mock backend",
+    expected_behavior="Minimal prompt; measures platform overhead on short requests",
+    target_output_tokens=32,
+    rationale="Reference point for low input volume and bounded output",
 )
 
 MEDIUM_PROMPT_PROFILE = WorkloadProfile(
@@ -49,7 +55,9 @@ MEDIUM_PROMPT_PROFILE = WorkloadProfile(
     stream=False,
     input_size_label="~80 words",
     output_size_label="<=128 tokens",
-    expected_behavior="Moderate prompt with standard completion path",
+    expected_behavior="Moderate prompt length; default concurrency baseline workload",
+    target_output_tokens=128,
+    rationale="Represents typical interactive query length",
 )
 
 LONG_PROMPT_PROFILE = WorkloadProfile(
@@ -59,7 +67,9 @@ LONG_PROMPT_PROFILE = WorkloadProfile(
     stream=False,
     input_size_label="~400 words",
     output_size_label="<=256 tokens",
-    expected_behavior="Longer prompt; exercises admission and batch placement",
+    expected_behavior="Long prompt; exercises admission and batch placement",
+    target_output_tokens=256,
+    rationale="Stress input-side token volume without changing backend",
 )
 
 STREAMING_PROFILE = WorkloadProfile(
@@ -70,6 +80,8 @@ STREAMING_PROFILE = WorkloadProfile(
     input_size_label="~10 words",
     output_size_label="<=64 streamed tokens",
     expected_behavior="Streaming path with TTFT and ITL measurement",
+    target_output_tokens=64,
+    rationale="Baseline for token delivery latency independent of sync completion path",
 )
 
 MIXED_PROFILE = WorkloadProfile(
@@ -80,6 +92,8 @@ MIXED_PROFILE = WorkloadProfile(
     input_size_label="~80 words",
     output_size_label="<=64 tokens",
     expected_behavior="Scenario alternates sync and stream requests",
+    target_output_tokens=64,
+    rationale="Mixed-mode reference for future comparison runs",
 )
 
 PROFILES: dict[str, WorkloadProfile] = {
@@ -104,3 +118,7 @@ def get_profile(profile_id: str) -> WorkloadProfile:
 def prompt_for_profile(profile: WorkloadProfile) -> str:
     prompts = _load_prompts()
     return prompts.get(profile.prompt_key, profile.prompt_key)
+
+
+def estimated_input_tokens_for_profile(profile: WorkloadProfile) -> int:
+    return estimate_input_tokens(prompt_for_profile(profile))

@@ -1,0 +1,9 @@
+{
+  "scenario_id": "baseline_single_long",
+  "name": "baseline_single_long",
+  "description": "Single-request baseline with long prompt workload",
+  "concurrency": 1,
+  "request_count": 1,
+  "workload_profile": "long_prompt",
+  "stream": false
+}

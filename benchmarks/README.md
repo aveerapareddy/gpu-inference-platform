@@ -1,6 +1,6 @@
 # Benchmarks
 
-**Status:** Implemented (Session 22)  
+**Status:** Implemented (Session 22–23)  
 **Owner:** benchmarks/ (framework definitions, runners, persisted results)
 
 ## Layout
@@ -20,7 +20,10 @@ Embedded validation (no HTTP, mock backend):
 
 ```bash
 python runtime-validation/benchmark_validation.py
+python runtime-validation/baseline_validation.py
 ```
+
+Baseline report output: `benchmarks/reports/baseline-results.md`
 
 k6 (requires running gateway):
 

@@ -1,0 +1,9 @@
+{
+  "scenario_id": "baseline_single_medium",
+  "name": "baseline_single_medium",
+  "description": "Single-request baseline with medium prompt workload",
+  "concurrency": 1,
+  "request_count": 1,
+  "workload_profile": "medium_prompt",
+  "stream": false
+}

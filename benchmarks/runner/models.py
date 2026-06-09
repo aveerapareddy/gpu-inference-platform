@@ -21,6 +21,8 @@ class HardwareMetadata(BaseModel):
     gpu_count: int = 0
     gpu_source: str = "unknown"
     hostname: str | None = None
+    os_name: str | None = None
+    os_version: str | None = None
 
 
 class ModelMetadata(BaseModel):
@@ -30,7 +32,31 @@ class ModelMetadata(BaseModel):
     backend_id: str | None = None
     max_output_tokens: int | None = None
     stream: bool = False
+    model_size: str | None = None
+    vllm_version: str | None = None
     configuration: dict[str, Any] = Field(default_factory=dict)
+
+
+class BenchmarkEnvironment(BaseModel):
+    """Full runtime environment attached to every benchmark run."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    gpu_model: str | None = None
+    gpu_memory_total_bytes: int | None = None
+    gpu_count: int = 0
+    gpu_source: str = "unknown"
+    cpu_model: str | None = None
+    ram_bytes: int | None = None
+    os: str
+    platform: str
+    python_version: str
+    vllm_version: str | None = None
+    model_name: str
+    model_size: str | None = None
+    backend_id: str
+    hostname: str | None = None
+    captured_at: datetime
 
 
 class BenchmarkScenario(BaseModel):
@@ -62,6 +88,11 @@ class BenchmarkResult(BaseModel):
     stream: bool = False
     prompt_chars: int = 0
     max_tokens: int = 0
+    estimated_input_tokens: int = 0
+    tokens_generated: int | None = Field(default=None, ge=0)
+    gpu_utilization_percent: float | None = Field(default=None, ge=0.0)
+    gpu_memory_used_bytes: int | None = Field(default=None, ge=0)
+    gpu_metrics_source: str | None = None
 
 
 class BenchmarkSummary(BaseModel):
@@ -72,11 +103,16 @@ class BenchmarkSummary(BaseModel):
     failed_requests: int
     throughput_rps: float | None = None
     latency_ms_p50: float | None = None
+    latency_ms_p95: float | None = None
     latency_ms_p99: float | None = None
     ttft_ms_p50: float | None = None
+    ttft_ms_p95: float | None = None
     ttft_ms_p99: float | None = None
     itl_ms_p50: float | None = None
+    itl_ms_p95: float | None = None
     queue_wait_ms_p50: float | None = None
+    gpu_utilization_percent_p50: float | None = None
+    gpu_memory_used_bytes_p50: int | None = None
     duration_seconds: float
 
 
@@ -85,6 +121,7 @@ class BenchmarkRun(BaseModel):
 
     run_id: UUID = Field(default_factory=uuid4)
     scenario: BenchmarkScenario
+    environment: BenchmarkEnvironment | None = None
     hardware: HardwareMetadata
     model: ModelMetadata
     started_at: datetime

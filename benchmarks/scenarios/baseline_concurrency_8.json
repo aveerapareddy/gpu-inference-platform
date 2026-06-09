@@ -1,0 +1,9 @@
+{
+  "scenario_id": "baseline_concurrency_8",
+  "name": "baseline_concurrency_8",
+  "description": "Low-concurrency baseline with short prompt workload",
+  "concurrency": 8,
+  "request_count": 8,
+  "workload_profile": "short_prompt",
+  "stream": false
+}

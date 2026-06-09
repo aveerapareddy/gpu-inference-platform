@@ -1,0 +1,9 @@
+{
+  "scenario_id": "baseline_single_short",
+  "name": "baseline_single_short",
+  "description": "Single-request baseline with short prompt workload",
+  "concurrency": 1,
+  "request_count": 1,
+  "workload_profile": "short_prompt",
+  "stream": false
+}

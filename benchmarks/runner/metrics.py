@@ -24,6 +24,8 @@ def build_summary(
     ttfts = [r.ttft_ms for r in successes if r.ttft_ms is not None]
     itls = [v for r in successes for v in r.itl_ms_samples]
     queue_waits = [r.queue_wait_ms for r in successes if r.queue_wait_ms is not None]
+    gpu_utils = [r.gpu_utilization_percent for r in successes if r.gpu_utilization_percent is not None]
+    gpu_mem = [r.gpu_memory_used_bytes for r in successes if r.gpu_memory_used_bytes is not None]
 
     throughput = None
     if duration_seconds > 0 and successes:
@@ -35,11 +37,20 @@ def build_summary(
         failed_requests=len(failures),
         throughput_rps=throughput,
         latency_ms_p50=_percentile(latencies, 50.0),
+        latency_ms_p95=_percentile(latencies, 95.0),
         latency_ms_p99=_percentile(latencies, 99.0),
         ttft_ms_p50=_percentile(ttfts, 50.0),
+        ttft_ms_p95=_percentile(ttfts, 95.0),
         ttft_ms_p99=_percentile(ttfts, 99.0),
         itl_ms_p50=_percentile(itls, 50.0),
+        itl_ms_p95=_percentile(itls, 95.0),
         queue_wait_ms_p50=_percentile(queue_waits, 50.0),
+        gpu_utilization_percent_p50=_percentile(gpu_utils, 50.0),
+        gpu_memory_used_bytes_p50=(
+            int(_percentile([float(v) for v in gpu_mem], 50.0))
+            if gpu_mem
+            else None
+        ),
         duration_seconds=duration_seconds,
     )
 

@@ -1,0 +1,9 @@
+{
+  "scenario_id": "baseline_single_streaming",
+  "name": "baseline_single_streaming",
+  "description": "Single-request baseline with streaming workload",
+  "concurrency": 1,
+  "request_count": 1,
+  "workload_profile": "streaming",
+  "stream": true
+}
