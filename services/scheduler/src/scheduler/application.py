@@ -117,6 +117,7 @@ def create_application(
     trace_manager: TraceManager | None = None,
     failure_injector: FailureInjector | None = None,
     routing_engine: RoutingEnginePort | None = None,
+    dispatch_min_members: int | None = None,
 ) -> SchedulerApplication:
     settings = settings or get_settings()
     logger = StructuredLogger(settings.service_name)
@@ -159,6 +160,7 @@ def create_application(
             adapter_client,
             backend_id=settings.default_backend_id,
             routing_engine=routing_engine,
+            min_dispatch_members=dispatch_min_members,
         )
     return SchedulerApplication(
         settings=settings,

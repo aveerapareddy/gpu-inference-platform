@@ -26,10 +26,16 @@ def build_summary(
     queue_waits = [r.queue_wait_ms for r in successes if r.queue_wait_ms is not None]
     gpu_utils = [r.gpu_utilization_percent for r in successes if r.gpu_utilization_percent is not None]
     gpu_mem = [r.gpu_memory_used_bytes for r in successes if r.gpu_memory_used_bytes is not None]
+    kv_ratios = [r.kv_cache_occupancy_ratio for r in successes if getattr(r, "kv_cache_occupancy_ratio", None) is not None]
+    active_seq = [r.active_sequences for r in successes if getattr(r, "active_sequences", None) is not None]
+    total_tokens = sum(r.tokens_generated or 0 for r in successes)
 
     throughput = None
+    tokens_per_second = None
     if duration_seconds > 0 and successes:
         throughput = len(successes) / duration_seconds
+        if total_tokens > 0:
+            tokens_per_second = total_tokens / duration_seconds
 
     return BenchmarkSummary(
         total_requests=len(results),
@@ -51,6 +57,9 @@ def build_summary(
             if gpu_mem
             else None
         ),
+        tokens_per_second=tokens_per_second,
+        kv_cache_occupancy_ratio_p50=_percentile(kv_ratios, 50.0),
+        active_sequences_p50=_percentile([float(v) for v in active_seq], 50.0),
         duration_seconds=duration_seconds,
     )
 

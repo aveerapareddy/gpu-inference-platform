@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400">
+<rect width="100%" height="100%" fill="white"/>
+<text x="320.0" y="24" text-anchor="middle" font-size="16" font-family="sans-serif">Latency p50 vs Concurrency</text>
+<text x="16" y="200.0" transform="rotate(-90 16 200.0)" text-anchor="middle" font-size="12" font-family="sans-serif">latency ms</text>
+<polyline fill="none" stroke="#16a34a" stroke-width="2" points="60.0,340.0 320.0,60.0 580.0,287.8"/>
+<text x="580" y="287.8" font-size="11" fill="#16a34a" font-family="sans-serif">continuous_batching</text>
+<polyline fill="none" stroke="#2563eb" stroke-width="2" points="60.0,147.4 320.0,60.0 580.0,340.0"/>
+<text x="580" y="340.0" font-size="11" fill="#2563eb" font-family="sans-serif">no_batching</text>
+<polyline fill="none" stroke="#dc2626" stroke-width="2" points="60.0,340.0 320.0,60.0 580.0,330.1"/>
+<text x="580" y="330.1" font-size="11" fill="#dc2626" font-family="sans-serif">static_batching</text>
+<text x="60.0" y="380" text-anchor="middle" font-size="11" font-family="sans-serif">2</text>
+<text x="320.0" y="380" text-anchor="middle" font-size="11" font-family="sans-serif">4</text>
+<text x="580.0" y="380" text-anchor="middle" font-size="11" font-family="sans-serif">8</text>
+</svg>

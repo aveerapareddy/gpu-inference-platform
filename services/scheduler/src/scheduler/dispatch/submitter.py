@@ -22,11 +22,13 @@ class BatchDispatchService:
         *,
         backend_id: str,
         routing_engine: RoutingEnginePort | None = None,
+        min_dispatch_members: int | None = None,
     ) -> None:
         self._batch = batch_service
         self._adapter = adapter
         self._default_backend_id = backend_id
         self._routing = routing_engine
+        self._min_dispatch_members = min_dispatch_members
         self._submitted_batch_ids: set[str] = set()
 
     async def submit_pending_batches(self) -> list[BatchDispatchResult]:
@@ -38,6 +40,11 @@ class BatchDispatchService:
             if batch.state not in {BatchState.ACTIVE, BatchState.READY, BatchState.FILLING}:
                 continue
             if batch.active_member_count == 0:
+                continue
+            if (
+                self._min_dispatch_members is not None
+                and batch.active_member_count < self._min_dispatch_members
+            ):
                 continue
 
             assignments = self._batch.get_batch_assignments(batch.batch_id)

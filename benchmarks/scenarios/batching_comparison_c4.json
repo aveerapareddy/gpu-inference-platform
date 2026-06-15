@@ -1,0 +1,9 @@
+{
+  "scenario_id": "batching_comparison_c4",
+  "name": "batching_comparison_c4",
+  "description": "Batching comparison at concurrency 4 with streaming workload",
+  "concurrency": 4,
+  "request_count": 4,
+  "workload_profile": "streaming",
+  "stream": true
+}

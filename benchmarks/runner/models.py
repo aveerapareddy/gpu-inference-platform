@@ -85,6 +85,10 @@ class BenchmarkResult(BaseModel):
     queue_wait_ms: float | None = Field(default=None, ge=0.0)
     scheduler_latency_ms: float | None = Field(default=None, ge=0.0)
     batch_latency_ms: float | None = Field(default=None, ge=0.0)
+    queue_depth_at_schedule: int | None = Field(default=None, ge=0)
+    request_age_ms: float | None = Field(default=None, ge=0.0)
+    scheduling_delay_ms: float | None = Field(default=None, ge=0.0)
+    batch_member_count_at_dispatch: int | None = Field(default=None, ge=0)
     stream: bool = False
     prompt_chars: int = 0
     max_tokens: int = 0
@@ -93,6 +97,8 @@ class BenchmarkResult(BaseModel):
     gpu_utilization_percent: float | None = Field(default=None, ge=0.0)
     gpu_memory_used_bytes: int | None = Field(default=None, ge=0)
     gpu_metrics_source: str | None = None
+    kv_cache_occupancy_ratio: float | None = Field(default=None, ge=0.0)
+    active_sequences: int | None = Field(default=None, ge=0)
 
 
 class BenchmarkSummary(BaseModel):
@@ -113,6 +119,9 @@ class BenchmarkSummary(BaseModel):
     queue_wait_ms_p50: float | None = None
     gpu_utilization_percent_p50: float | None = None
     gpu_memory_used_bytes_p50: int | None = None
+    tokens_per_second: float | None = None
+    kv_cache_occupancy_ratio_p50: float | None = None
+    active_sequences_p50: float | None = None
     duration_seconds: float
 
 
@@ -130,3 +139,6 @@ class BenchmarkRun(BaseModel):
     summary: BenchmarkSummary | None = None
     metrics_snapshot: dict[str, float] = Field(default_factory=dict)
     runner: str = "embedded"
+    batching_mode: str | None = None
+    batching_config: dict[str, Any] = Field(default_factory=dict)
+    runtime_snapshot: dict[str, Any] = Field(default_factory=dict)

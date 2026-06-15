@@ -1,2 +1,5 @@
 *.json
 !.gitkeep
+!batching-comparison/
+batching-comparison/*.json
+!batching-comparison/*.svg

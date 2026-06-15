@@ -159,6 +159,7 @@ class ValidationStack:
         backend: MockInferenceBackend | InjectableMockBackend | None = None,
         admission: AdmissionFramework | None = None,
         db_path: str | None = None,
+        dispatch_min_members: int | None = None,
     ) -> None:
         self.failure_injector = failure_injector or FailureInjector()
         self.trace_store = RequestTraceStore()
@@ -218,6 +219,7 @@ class ValidationStack:
             metrics_recorder=self.metrics_recorder,
             trace_manager=self.trace_manager,
             failure_injector=self.failure_injector,
+            dispatch_min_members=dispatch_min_members,
         )
         self.stack = PlatformStack(
             control_plane=self.cp,
