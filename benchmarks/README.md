@@ -1,6 +1,6 @@
 # Benchmarks
 
-**Status:** Implemented (Session 22–24)  
+**Status:** Implemented (Session 22–25)  
 **Owner:** benchmarks/ (framework definitions, runners, persisted results)
 
 ## Layout
@@ -22,10 +22,12 @@ Embedded validation (no HTTP, mock backend):
 python runtime-validation/benchmark_validation.py
 python runtime-validation/baseline_validation.py
 python runtime-validation/batching_validation.py
+python runtime-validation/scaling_validation.py
 ```
 
 Baseline report: `benchmarks/reports/baseline-results.md`  
-Batching comparison report: `benchmarks/reports/continuous-batching-analysis.md`
+Batching comparison report: `benchmarks/reports/continuous-batching-analysis.md`  
+Scaling report: `benchmarks/reports/concurrency-scaling-analysis.md`
 
 k6 (requires running gateway):
 

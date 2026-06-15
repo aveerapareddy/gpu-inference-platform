@@ -3,3 +3,6 @@
 !batching-comparison/
 batching-comparison/*.json
 !batching-comparison/*.svg
+!scaling-analysis/
+scaling-analysis/*.json
+!scaling-analysis/*.svg

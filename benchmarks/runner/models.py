@@ -101,6 +101,28 @@ class BenchmarkResult(BaseModel):
     active_sequences: int | None = Field(default=None, ge=0)
 
 
+class TelemetrySample(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    captured_at: datetime
+    queue_depth: int = 0
+    active_requests: int = 0
+    active_sequences: int = 0
+    kv_cache_occupancy_ratio: float = 0.0
+    estimated_kv_bytes: int = 0
+    gpu_utilization_percent: float | None = None
+    gpu_memory_used_bytes: int | None = None
+    scheduler_total_cycles: int = 0
+
+
+class BottleneckAnalysis(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    primary_bottleneck: str
+    classifications: dict[str, bool] = Field(default_factory=dict)
+    evidence: tuple[str, ...] = Field(default_factory=tuple)
+
+
 class BenchmarkSummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -142,3 +164,5 @@ class BenchmarkRun(BaseModel):
     batching_mode: str | None = None
     batching_config: dict[str, Any] = Field(default_factory=dict)
     runtime_snapshot: dict[str, Any] = Field(default_factory=dict)
+    telemetry_samples: tuple[TelemetrySample, ...] = Field(default_factory=tuple)
+    bottleneck: BottleneckAnalysis | None = None

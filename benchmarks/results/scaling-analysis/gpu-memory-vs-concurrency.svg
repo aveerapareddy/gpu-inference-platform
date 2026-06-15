@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400">
+<rect width="100%" height="100%" fill="white"/>
+<text x="320.0" y="24" text-anchor="middle" font-size="16" font-family="sans-serif">GPU Memory Peak vs Concurrency</text>
+<text x="16" y="200.0" transform="rotate(-90 16 200.0)" text-anchor="middle" font-size="12" font-family="sans-serif">bytes</text>
+<polyline fill="none" stroke="#444444" stroke-width="2" points="60.0,340.0 134.3,340.0 208.6,340.0 282.9,340.0 357.1,340.0 431.4,340.0 505.7,340.0 580.0,340.0"/>
+<text x="580" y="340.0" font-size="11" fill="#444444" font-family="sans-serif">measured</text>
+<text x="60.0" y="380" text-anchor="middle" font-size="11" font-family="sans-serif">1</text>
+<text x="134.3" y="380" text-anchor="middle" font-size="11" font-family="sans-serif">2</text>
+<text x="208.6" y="380" text-anchor="middle" font-size="11" font-family="sans-serif">4</text>
+<text x="282.9" y="380" text-anchor="middle" font-size="11" font-family="sans-serif">8</text>
+<text x="357.1" y="380" text-anchor="middle" font-size="11" font-family="sans-serif">16</text>
+<text x="431.4" y="380" text-anchor="middle" font-size="11" font-family="sans-serif">32</text>
+<text x="505.7" y="380" text-anchor="middle" font-size="11" font-family="sans-serif">64</text>
+<text x="580.0" y="380" text-anchor="middle" font-size="11" font-family="sans-serif">128</text>
+</svg>

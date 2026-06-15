@@ -209,6 +209,8 @@ async def _schedule_and_complete_all(
     submits: list[SubmitRequest],
     profile,
     gpu_collector: GPUMetricsCollector | None,
+    *,
+    on_request_complete=None,
 ) -> list[BenchmarkResult]:
     results_by_index: dict[int, BenchmarkResult] = {}
     dispatch_sizes: dict[int, int] = {}
@@ -245,6 +247,8 @@ async def _schedule_and_complete_all(
                 batch_members_at_dispatch=dispatch_sizes.get(index),
             )
             results_by_index[index] = result
+            if on_request_complete is not None:
+                on_request_complete(result)
 
         pending = still_pending
 
