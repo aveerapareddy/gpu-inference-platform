@@ -74,6 +74,28 @@ class RuntimeMetricsRecorder:
             self._registry.scheduler_failures_total.inc()
         self._registry.scheduler_cycle_duration_seconds.observe(duration_seconds)
 
+    def record_scheduler_policy_decision(
+        self,
+        *,
+        policy_id: str,
+        selected: bool,
+        decision_reason: str,
+        queue_wait_seconds: float,
+        request_age_seconds: float,
+    ) -> None:
+        labels = {
+            "policy_id": policy_id,
+            "selected": "true" if selected else "false",
+            "decision_reason": decision_reason,
+        }
+        self._registry.scheduler_policy_decisions_total.labels(**labels).inc()
+        self._registry.scheduler_policy_queue_age_seconds.labels(policy_id=policy_id).observe(
+            queue_wait_seconds
+        )
+        self._registry.scheduler_policy_request_age_seconds.labels(policy_id=policy_id).observe(
+            request_age_seconds
+        )
+
     def record_batch_created(self) -> None:
         self._registry.batches_created_total.inc()
 

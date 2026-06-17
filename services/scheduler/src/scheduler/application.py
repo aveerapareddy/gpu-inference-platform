@@ -26,7 +26,7 @@ from scheduler.queue.reader import QueueReader
 from scheduler.dispatch.submitter import BatchDispatchService
 from scheduler.integrations.adapter import AdapterClient
 from scheduler.integrations.routing import RoutingEnginePort
-from scheduler.selection.fifo import FifoSelector
+from scheduler.policies.registry import build_policy
 
 
 @dataclass
@@ -52,6 +52,7 @@ class SchedulerApplication:
             queue_scan_limit=self.settings.queue_scan_limit,
             max_batch_size=self.settings.max_batch_size,
             max_active_requests=self.settings.max_active_requests,
+            scheduler_policy_id=self.settings.scheduler_policy_id,
         )
         self.state.process_mode = ProcessSchedulerState.ACCEPTING
         self._running = True
@@ -118,8 +119,11 @@ def create_application(
     failure_injector: FailureInjector | None = None,
     routing_engine: RoutingEnginePort | None = None,
     dispatch_min_members: int | None = None,
+    scheduler_policy_id: str | None = None,
 ) -> SchedulerApplication:
     settings = settings or get_settings()
+    if scheduler_policy_id is not None:
+        settings = settings.model_copy(update={"scheduler_policy_id": scheduler_policy_id})
     logger = StructuredLogger(settings.service_name)
     events = SchedulerEventEmitter(logger, settings.service_name, trace_recorder=trace_recorder)
     batch_events = BatchEventEmitter(logger, settings.service_name, trace_recorder=trace_recorder)
@@ -137,10 +141,10 @@ def create_application(
     )
     batch = BatchService(batch_engine)
     state = SchedulerState()
-    selector = FifoSelector()
+    policy = build_policy(settings)
     cycle_runner = SchedulingCycleRunner(
         queue_reader=queue_reader,
-        selector=selector,
+        policy=policy,
         events=events,
         settings=settings,
         state=state,

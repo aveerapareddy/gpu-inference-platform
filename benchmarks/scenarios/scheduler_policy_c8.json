@@ -1,0 +1,9 @@
+{
+  "scenario_id": "scheduler_policy_c8",
+  "name": "scheduler_policy_c8",
+  "description": "Scheduler policy comparison at concurrency 8 with mixed job sizes",
+  "concurrency": 8,
+  "request_count": 8,
+  "workload_profile": "mixed_job_sizes",
+  "stream": true
+}

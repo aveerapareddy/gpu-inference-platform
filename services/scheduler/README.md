@@ -7,7 +7,7 @@ Implementation: In-process with control plane queue reader; no HTTP server
 
 | Component | Owner | Responsibility |
 | --- | --- | --- |
-| Work selection | Scheduler loop | FIFO scan, candidate selection |
+| Work selection | Scheduler loop | Policy-driven candidate selection (`SchedulerPolicy`) |
 | Batch placement | Batching engine | Admission, membership, lifecycle |
 | Backend dispatch | Scheduler `BatchDispatchService` | Build `DispatchBatch`, submit via `AdapterClient` |
 | Queue storage | Control plane | Enqueue/dequeue, queue timing |
@@ -18,7 +18,7 @@ The scheduler selects work. The batching engine owns placement into managed batc
 ## Scheduler responsibilities (implemented)
 
 - Tick loop and queue inspection (read-only)
-- FIFO selection up to `max_candidate_requests`
+- Policy selection up to `max_candidate_requests` (default: FIFO; also SJF, latency-aware, fairness)
 - Hand selected requests to batching engine each cycle
 - Dispatch: `BatchDispatchService` submits `FILLING`/`READY`/`ACTIVE` batches to adapter after each cycle
 - `SchedulingResult.dispatch_results` records adapter accept/reject
@@ -39,14 +39,15 @@ The scheduler selects work. The batching engine owns placement into managed batc
 - HTTP APIs
 - Inference execution, token generation, vLLM SDK
 - Lifecycle transition past `QUEUED`
-- Routing, streaming, priority/fairness tuning
+- Routing, streaming
+- Scheduler optimization, predictive or ML-driven scheduling
 - Metrics backend export
 
 ## Scheduler-to-batch handoff
 
 Each cycle:
 
-1. Scan queue → select FIFO candidates
+1. Scan queue → evaluate candidates via configured `SchedulerPolicy`
 2. For each selected request, call `BatchService.place_selected(queue_item)`
 3. Batching engine evaluates admission rules
 4. Accepted → `BatchPlacementDecision` with `BatchAssignment`

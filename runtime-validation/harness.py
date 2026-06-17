@@ -160,6 +160,7 @@ class ValidationStack:
         admission: AdmissionFramework | None = None,
         db_path: str | None = None,
         dispatch_min_members: int | None = None,
+        scheduler_policy_id: str = "fifo",
     ) -> None:
         self.failure_injector = failure_injector or FailureInjector()
         self.trace_store = RequestTraceStore()
@@ -220,6 +221,7 @@ class ValidationStack:
             trace_manager=self.trace_manager,
             failure_injector=self.failure_injector,
             dispatch_min_members=dispatch_min_members,
+            scheduler_policy_id=scheduler_policy_id,
         )
         self.stack = PlatformStack(
             control_plane=self.cp,

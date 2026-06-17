@@ -19,8 +19,8 @@ from scheduler.models.batch_decision import BatchPlacementDecision, BatchRejecti
 from scheduler.models.decision import SchedulingFailure, SchedulingResult
 from scheduler.models.state import SchedulerCycle, SchedulerState
 from scheduler.observability.events import SchedulerEventEmitter, SchedulerEventType
+from scheduler.policies.base import SchedulerPolicy
 from scheduler.queue.reader import QueueReader, items_to_candidates
-from scheduler.selection.fifo import FifoSelector
 
 
 class SchedulingCycleRunner:
@@ -29,7 +29,7 @@ class SchedulingCycleRunner:
     def __init__(
         self,
         queue_reader: QueueReader,
-        selector: FifoSelector,
+        policy: SchedulerPolicy,
         events: SchedulerEventEmitter,
         settings: Settings,
         state: SchedulerState,
@@ -39,7 +39,7 @@ class SchedulingCycleRunner:
         failure_injector: FailureInjector | None = None,
     ) -> None:
         self._queue = queue_reader
-        self._selector = selector
+        self._policy = policy
         self._events = events
         self._settings = settings
         self._state = state
@@ -62,7 +62,10 @@ class SchedulingCycleRunner:
         self._events.emit(
             SchedulerEventType.SCHEDULER_CYCLE_STARTED,
             scheduler_cycle_id=cycle_id,
-            extra={"queue_scan_limit": self._settings.queue_scan_limit},
+            extra={
+                "queue_scan_limit": self._settings.queue_scan_limit,
+                "scheduler_policy_id": self._policy.policy_id,
+            },
         )
 
         try:
@@ -74,10 +77,24 @@ class SchedulingCycleRunner:
             item_by_id = {item.request_id: item for item in items}
             candidates = items_to_candidates(items)
 
-            decisions, selected, skipped = self._selector.evaluate(
+            decisions, selected, skipped = self._policy.evaluate(
                 candidates,
                 max_candidate_requests=self._settings.max_candidate_requests,
             )
+
+            candidate_by_id = {c.request_id: c for c in candidates}
+            if self._metrics is not None:
+                for decision in decisions:
+                    candidate = candidate_by_id.get(decision.request_id)
+                    if candidate is None:
+                        continue
+                    self._metrics.record_scheduler_policy_decision(
+                        policy_id=self._policy.policy_id,
+                        selected=decision.selected,
+                        decision_reason=decision.decision_reason,
+                        queue_wait_seconds=candidate.queue_wait_duration_ms / 1000.0,
+                        request_age_seconds=candidate.request_age_ms / 1000.0,
+                    )
 
             placements: list[BatchPlacementDecision] = []
             rejections: list[BatchRejectionDecision] = []
@@ -119,7 +136,14 @@ class SchedulingCycleRunner:
                         correlation_id=decision.correlation_id,
                         model=candidate.model if candidate else None,
                         decision_reason=decision.decision_reason,
-                        extra={"queue_position": decision.queue_position},
+                        extra={
+                            "queue_position": decision.queue_position,
+                            "scheduler_policy_id": self._policy.policy_id,
+                            "queue_wait_duration_ms": (
+                                candidate.queue_wait_duration_ms if candidate else None
+                            ),
+                            "request_age_ms": candidate.request_age_ms if candidate else None,
+                        },
                     )
                 else:
                     candidate = _find_candidate(candidates, decision.request_id)
@@ -130,7 +154,10 @@ class SchedulingCycleRunner:
                         correlation_id=decision.correlation_id,
                         model=candidate.model if candidate else None,
                         decision_reason=decision.decision_reason,
-                        extra={"queue_position": decision.queue_position},
+                        extra={
+                            "queue_position": decision.queue_position,
+                            "scheduler_policy_id": self._policy.policy_id,
+                        },
                     )
 
             end = cycle.cycle_end_time or datetime.now(timezone.utc)
@@ -156,6 +183,7 @@ class SchedulingCycleRunner:
                     "batch_rejected_count": len(rejections),
                     "skipped_count": len(skipped),
                     "candidate_count": len(candidates),
+                    "scheduler_policy_id": self._policy.policy_id,
                 },
             )
 

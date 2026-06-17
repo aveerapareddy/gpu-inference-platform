@@ -1,0 +1,9 @@
+{
+  "scenario_id": "scheduler_policy_c4",
+  "name": "scheduler_policy_c4",
+  "description": "Scheduler policy comparison at concurrency 4 with mixed job sizes",
+  "concurrency": 4,
+  "request_count": 4,
+  "workload_profile": "mixed_job_sizes",
+  "stream": true
+}

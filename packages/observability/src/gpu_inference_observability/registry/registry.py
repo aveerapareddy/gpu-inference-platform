@@ -118,6 +118,26 @@ class MetricsRegistry:
             buckets=_DURATION_BUCKETS,
             registry=self._registry,
         )
+        self.scheduler_policy_decisions_total = Counter(
+            f"{PROMETHEUS_PREFIX}_scheduler_policy_decisions_total",
+            "Per-request scheduler policy decisions",
+            ["policy_id", "selected", "decision_reason"],
+            registry=self._registry,
+        )
+        self.scheduler_policy_queue_age_seconds = Histogram(
+            f"{PROMETHEUS_PREFIX}_scheduler_policy_queue_age_seconds",
+            "Queue wait at policy decision time",
+            ["policy_id"],
+            buckets=_DURATION_BUCKETS,
+            registry=self._registry,
+        )
+        self.scheduler_policy_request_age_seconds = Histogram(
+            f"{PROMETHEUS_PREFIX}_scheduler_policy_request_age_seconds",
+            "Request age at policy decision time",
+            ["policy_id"],
+            buckets=_DURATION_BUCKETS,
+            registry=self._registry,
+        )
 
         self.batches_created_total = Counter(
             f"{PROMETHEUS_PREFIX}_batches_created_total",

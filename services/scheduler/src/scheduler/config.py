@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     batch_admission_window_ms: int = Field(default=5000, ge=1)
     default_backend_id: str = "mock"
     dispatch_enabled: bool = True
+    scheduler_policy_id: str = "fifo"
+    latency_queue_objective_ms: float = Field(default=100.0, gt=0.0)
+    latency_request_age_objective_ms: float = Field(default=5000.0, gt=0.0)
+    fairness_elevated_weight: float = Field(default=3.0, gt=0.0)
+    fairness_default_weight: float = Field(default=2.0, gt=0.0)
+    fairness_background_weight: float = Field(default=1.0, gt=0.0)
 
 
 @lru_cache

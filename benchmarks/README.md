@@ -1,6 +1,6 @@
 # Benchmarks
 
-**Status:** Implemented (Session 22–25)  
+**Status:** Implemented (Session 22–26)  
 **Owner:** benchmarks/ (framework definitions, runners, persisted results)
 
 ## Layout
@@ -23,11 +23,13 @@ python runtime-validation/benchmark_validation.py
 python runtime-validation/baseline_validation.py
 python runtime-validation/batching_validation.py
 python runtime-validation/scaling_validation.py
+python runtime-validation/policy_validation.py
 ```
 
 Baseline report: `benchmarks/reports/baseline-results.md`  
 Batching comparison report: `benchmarks/reports/continuous-batching-analysis.md`  
-Scaling report: `benchmarks/reports/concurrency-scaling-analysis.md`
+Scaling report: `benchmarks/reports/concurrency-scaling-analysis.md`  
+Scheduler policy report: `benchmarks/reports/scheduler-policy-analysis.md`
 
 k6 (requires running gateway):
 

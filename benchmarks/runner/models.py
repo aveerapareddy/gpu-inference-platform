@@ -161,6 +161,8 @@ class BenchmarkRun(BaseModel):
     summary: BenchmarkSummary | None = None
     metrics_snapshot: dict[str, float] = Field(default_factory=dict)
     runner: str = "embedded"
+    scheduler_policy: str | None = None
+    scheduler_policy_config: dict[str, Any] = Field(default_factory=dict)
     batching_mode: str | None = None
     batching_config: dict[str, Any] = Field(default_factory=dict)
     runtime_snapshot: dict[str, Any] = Field(default_factory=dict)

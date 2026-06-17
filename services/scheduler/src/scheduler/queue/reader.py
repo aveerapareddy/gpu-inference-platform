@@ -31,9 +31,20 @@ class QueueReader(Protocol):
         """Return up to limit items in queue order (FIFO head first)."""
 
 
+def _estimate_input_tokens(item: QueueItem) -> int:
+    total_chars = sum(len(message.content) for message in item.inference_request.messages)
+    return max(1, total_chars // 4)
+
+
 def queue_item_to_candidate(item: QueueItem, *, queue_position: int) -> SchedulingCandidate:
     now = datetime.now(timezone.utc)
     wait_ms = (now - item.enqueued_at).total_seconds() * 1000.0
+    age_ms = (now - item.request_context.arrival_time).total_seconds() * 1000.0
+    input_tokens = _estimate_input_tokens(item)
+    max_tokens = item.inference_request.max_tokens
+    priority = item.priority_class.value
+    if item.inference_request.priority_class is not None:
+        priority = item.inference_request.priority_class.value
     return SchedulingCandidate(
         request_id=item.request_id,
         model=item.inference_request.model,
@@ -42,6 +53,11 @@ def queue_item_to_candidate(item: QueueItem, *, queue_position: int) -> Scheduli
         queue_position=queue_position,
         queue_wait_duration_ms=wait_ms,
         enqueued_at=item.enqueued_at,
+        max_tokens=max_tokens,
+        estimated_input_tokens=input_tokens,
+        estimated_job_tokens=input_tokens + max_tokens,
+        priority_class=priority,
+        request_age_ms=age_ms,
     )
 
 

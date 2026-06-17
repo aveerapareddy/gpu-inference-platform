@@ -96,6 +96,18 @@ MIXED_PROFILE = WorkloadProfile(
     rationale="Mixed-mode reference for future comparison runs",
 )
 
+MIXED_JOB_SIZES_PROFILE = WorkloadProfile(
+    profile_id="mixed_job_sizes",
+    prompt_key="short",
+    max_tokens=64,
+    stream=True,
+    input_size_label="alternating short/long max_tokens",
+    output_size_label="32 or 256 per request index",
+    expected_behavior="Alternates short and long job estimates for policy comparison",
+    target_output_tokens=64,
+    rationale="Expose scheduler ordering differences under identical batching configuration",
+)
+
 PROFILES: dict[str, WorkloadProfile] = {
     p.profile_id: p
     for p in (
@@ -104,6 +116,7 @@ PROFILES: dict[str, WorkloadProfile] = {
         LONG_PROMPT_PROFILE,
         STREAMING_PROFILE,
         MIXED_PROFILE,
+        MIXED_JOB_SIZES_PROFILE,
     )
 }
 
